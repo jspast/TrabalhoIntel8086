@@ -18,9 +18,24 @@ MAXARQ		equ	100	; Tamanho máximo do nome do arquivo
 ;------------------------------------------
 
 CMDLINE		db	MAXCMD dup(0)	; Buffer para armazenar a linha de comando
-FILE_IN		db      MAXARQ dup(0)   ;"a.in",0
-FILE_OUT	db      MAXARQ dup(0)	;"a.out",0	
-TENSAO		db      MAXARQ dup(0)	;"127",0
+
+FILE_IN		db	"a.in",0	; Nome do arquivo de entrada padrão
+		db 	MAXARQ dup(0)
+
+FILE_OUT	db      "a.out",0	; Nome do arquivo de saída padrão
+		db	MAXARQ dup(0)
+
+TENSAO_ASCII	db	"127",0		; Tensão padrão em ASCII
+
+TENSAO		db	0		; Tensão
+
+ERRO_OPCAO1	db	"Opcao [-"
+ERRO_OPCAO2	db	" ] sem parametro",CR,LF,0	; Mensagem de erro para opção inválida
+
+ERRO_TENSAO	db	"Parametro da opcao [-v] deve ser 127 ou 220",CR,LF,0	; Mensagem de erro para tensão inválida
+
+ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inválida
+ERRO_CONTEUDO	db	"invalido: ",0	; Mensagem de erro para conteúdo inválido
 
 ;------------------------------------------
 ; CÓDIGO
@@ -70,28 +85,24 @@ FileBuffer	db	10 dup (?)		; Usada dentro do setChar e getChar
 
 	; Obtém os argumentos da linha de comando
 
-	;lea	si,CMDLINE
 	lea     di,CMDLINE
-
-	lea	bx,[di]
 
 percorre_linha:
 	mov	al,' '	; Procura por um espaço
 	repne	scasb
-	cmp     cx, 0
+	cmp     cx,0
 	je	fim_linha
 	repe	scasb	; Vai até o último espaço
-	cmp     cx, 0
+	cmp     cx,0
 	je	fim_linha
 	dec	di	; Ajusta o ponteiro para depois do último espaço
 	inc	cx	
 	
-
 	mov	al,'-'	; Verifica se tem um '-' depois do espaço
 	scasb
 	je	verifica_opcao1
 	loop	percorre_linha
-	cmp     cx, 0
+	cmp     cx,0
 	je	fim_linha
 
 verifica_opcao1:
@@ -113,25 +124,112 @@ verifica_opcao3:
 verifica_opcao4:
 	cmp	dl,'v'
 	je 	verifica_opcao5
-	mov     si,di
 	loop	percorre_linha
 	jmp	fim_linha
 verifica_opcao5:
-	lea	di,TENSAO
+	mov     si,di
+	lea	di,TENSAO_ASCII
 	
 salva_opcao:
-	;call	guarda_nome
-	mov	ax,cx	; Salva o tamanho do string em AX, para uso futuro
+
+	; Verifica o parâmetro da opção
+
+	push	di
+
+	mov	di,si
+
+	mov	al,' '	; Procura por um espaço
+	repne	scasb
+	cmp     cx,0
+	je	erro_sem_parametro
+	repe	scasb	; Vai até o último espaço
+	cmp     cx,0
+	je	erro_sem_parametro
+	dec	di	; Ajusta o ponteiro para depois do último espaço
+	inc	cx
+	
+	mov	al,'-'	; Verifica se tem um '-' depois do espaço
+	scasb
+	je	erro_sem_parametro
+
+	dec	di	; Ajusta o ponteiro para o início do parâmetro
+	inc	cx
+
+	mov	si,di
+	push	cx	; Salva o tamanho restante da string, para uso futuro
+	mov	bx,cx
+
+	; Salva o parâmetro da opção
+
+	xor	cx,cx
+
+salva_nome:
+	dec	bx
+	cmp	bx,0
+	je	fim_nome
+
+	mov	al,' '	; Procura por um espaço
+	scasb
+	je	fim_nome
+	inc	cx
+	jmp	salva_nome
+
+fim_nome:
+	pop	ax	; Restaura o tamanho restante da string em ax
+	pop	di
+
 	rep     movsb
-	mov	cx,ax
+
+	mov	cx,ax	; Restaura o tamanho restante da string em cx
+	mov	di,si
+
+	;loop	percorre_linha	; improvisado:
+	dec	cx
+	jnz	percorre_linha
+
+fim_linha:
+
+	lea	bx,TENSAO_ASCII
+	call	atoi
+	cmp	ax,127
+	je	tensao_ok
+	cmp	ax,220
+	jne	erro_v
+
+tensao_ok:
+
 	lea	bx,FILE_IN
 	call    printf_s
 
-	loop	percorre_linha
-	jmp	fim_linha
+	lea	bx,FILE_OUT
+	call    printf_s
 
-fim_linha:
-	
+	lea	bx,TENSAO_ASCII
+	call    printf_s
+
+	jmp	fim
+
+erro_sem_parametro:
+
+	lea	di,ERRO_OPCAO2
+
+	mov	al,dl
+	stosb
+
+	lea	bx,ERRO_OPCAO1
+
+	call    printf_s
+
+	jmp	fim
+
+erro_v:
+
+	lea	bx,ERRO_TENSAO
+	call    printf_s
+
+	jmp	fim
+
+fim:
 
 .exit
 

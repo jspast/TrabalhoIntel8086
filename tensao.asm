@@ -53,6 +53,8 @@ FileBuffer	db	10 dup (?)		; Usada dentro do setChar e getChar
 .code
 .startup
 
+; Obtém os argumentos da linha de comando
+
 	CLD	; Limpa o direction flag
 
 	; Salva linha de comando em CMDLINE
@@ -83,25 +85,20 @@ FileBuffer	db	10 dup (?)		; Usada dentro do setChar e getChar
 	mov     ax,ds
 	mov     es,ax
 
-	; Obtém os argumentos da linha de comando
-
 	lea     di,CMDLINE
 
 percorre_linha:
-	mov	al,' '	; Procura por um espaço
-	repne	scasb
-	cmp     cx,0
-	je	fim_linha
-	repe	scasb	; Vai até o último espaço
-	cmp     cx,0
-	je	fim_linha
-	dec	di	; Ajusta o ponteiro para depois do último espaço
-	inc	cx	
+	
+	call	percorre_str_espaco
+	jc	fim_linha
 	
 	mov	al,'-'	; Verifica se tem um '-' depois do espaço
 	scasb
+
 	je	verifica_opcao1
+
 	loop	percorre_linha
+
 	cmp     cx,0
 	je	fim_linha
 
@@ -115,17 +112,20 @@ verifica_opcao1:
 	mov     si,di
 	lea	di,FILE_IN
 	jmp	salva_opcao
+
 verifica_opcao3:
 	cmp	dl,'o'
 	jne	verifica_opcao4
 	mov     si,di
 	lea	di,FILE_OUT
 	jmp	salva_opcao
+
 verifica_opcao4:
 	cmp	dl,'v'
 	je 	verifica_opcao5
 	loop	percorre_linha
 	jmp	fim_linha
+	
 verifica_opcao5:
 	mov     si,di
 	lea	di,TENSAO_ASCII
@@ -138,15 +138,8 @@ salva_opcao:
 
 	mov	di,si
 
-	mov	al,' '	; Procura por um espaço
-	repne	scasb
-	cmp     cx,0
-	je	erro_sem_parametro
-	repe	scasb	; Vai até o último espaço
-	cmp     cx,0
-	je	erro_sem_parametro
-	dec	di	; Ajusta o ponteiro para depois do último espaço
-	inc	cx
+	call	percorre_str_espaco
+	jc	erro_sem_parametro
 	
 	mov	al,'-'	; Verifica se tem um '-' depois do espaço
 	scasb
@@ -183,9 +176,7 @@ fim_nome:
 	mov	cx,ax	; Restaura o tamanho restante da string em cx
 	mov	di,si
 
-	;loop	percorre_linha	; improvisado:
-	dec	cx
-	jnz	percorre_linha
+	loop	percorre_linha
 
 fim_linha:
 
@@ -207,7 +198,7 @@ tensao_ok:
 	lea	bx,TENSAO_ASCII
 	call    printf_s
 
-	jmp	fim
+	jmp	abre_arquivo
 
 erro_sem_parametro:
 
@@ -229,6 +220,26 @@ erro_v:
 
 	jmp	fim
 
+abre_arquivo:
+
+	; Abre o arquivo de entrada
+
+	lea	dx,FILE_IN
+	call	fopen
+	jc	erro_abre_arquivo
+
+	mov	bx,ax
+
+	; Abre o arquivo de saída
+
+	lea	dx,FILE_OUT
+	call	fcreate
+	jc	erro_abre_arquivo
+
+	mov	bx,ax
+
+	; Lê o arquivo de entrada e escreve no arquivo de saída
+
 fim:
 
 .exit
@@ -237,88 +248,234 @@ fim:
 ; FUNÇÕES
 ;------------------------------------------
 
-; guarda_nome: String (bx) -> String (di)
-; Obj.: Dada uma string, guarda o nome do arquivo na string
-guarda_nome	proc	near
-	
-	rep     movsb
-	lea	bx,FILE_IN
-	call    printf_s
+; percorre_str_espaco: String (di) Inteiro (cx) -> String (di) Boolean (CF)
+; Obj.: Dada uma string e seu tamanho, percorre a string até encontrar o primeiro caractere depois de um espaço
+; Se encontrar, retorna o ponteiro para esse caractere e define CF como 0
+; Se não encontrar, retorna o ponteiro para o final da string e define CF como 1
+percorre_str_espaco	proc	near
+
+	mov	al,' '	; Procura por um espaço
+	repne	scasb
+
+	cmp     cx,0
+	je	p_str_e
+
+	repe	scasb	; Vai até o último espaço
+
+	cmp     cx,0
+	je	p_str_e
+
+	dec	di	; Ajusta o ponteiro para depois do último espaço
+	inc	cx
 
 	ret
-guarda_nome	endp
+
+p_str_e:
+
+	stc	; Define CF como 1
+
+	ret
+percorre_str_espaco	endp
 
 ; atoi: String (bx) -> Inteiro (ax)
 ; Obj.: recebe uma string e transforma em um inteiro
-; Ex:
-; lea bx, String1 (Em que String1 é db "2024",0)
-; call atoi
-; -> devolve o numero 2024 em ax
 atoi	proc near
 
-		; A = 0;
-		mov		ax,0
+	mov	ax,0		; A = 0;
 		
 atoi_2:
-		; while (*S!='\0') {
-		cmp		byte ptr[bx], 0
-		jz		atoi_1
+	cmp	byte ptr[bx],0	; while (*S!='\0') {
+	jz	atoi_1
 
-		; 	A = 10 * A
-		mov		cx,10
-		mul		cx
+	mov	cx,10		;	A = 10 * A
+	mul	cx
 
-		; 	A = A + *S
-		mov		ch,0
-		mov		cl,[bx]
-		add		ax,cx
+	mov	ch,0		;	A = A + *S - '0'
+	mov	cl,[bx]
+	add	ax,cx
 
-		; 	A = A - '0'
-		sub		ax,'0'
+	sub	ax,'0'		;	A = A - '0'
 
-		; 	++S
-		inc		bx
+	inc	bx		;	++S
 		
-		;}
-		jmp		atoi_2
+	jmp	atoi_2		;}
 
 atoi_1:
-		; return
-		ret
+	ret			; return A;
 
 atoi	endp
 
 ; printf_s: String (bx) -> void
 ; Obj.: dado uma String, escreve a string na tela
-; Ex.:
-; lea bx, String1 (em que String 1 é db "Java melhor linguagem",CR,LF,0)
-; call printf_s
-; -> Imprime o fato na tela e quebra linha
-; (Nao sei o que acontece se colocar so o LF ou so o CR, da uma
-; brincada ai pra descobrir)
 printf_s	proc	near
 
-;	While (*s!='\0') {
-	mov		dl,[bx]
-	cmp		dl,0
-	je		ps_1
+	mov	dl,[bx]		; While (*s!='\0') {
+	cmp	dl,0
+	je	ps_1
 
-;		putchar(*s)
-	push	bx
-	mov		ah,2
-	int		21H
-	pop		bx
+	push	bx		;	putchar(*s)
+	mov	ah,2
+	int	21H
+	pop	bx
 
-;		++s;
-	inc		bx
+	inc	bx		; 	++s;
 		
-;	}
-	jmp		printf_s
+	jmp	printf_s	; }
 		
 ps_1:
-	ret
+	ret			; return;
 	
 printf_s	endp
+
+; sprintf_w: Inteiro (ax) String (bx) -> String (bx)
+; Obj.: dado um numero e uma string, transforma o numero em ascii e salva na string dada, quase um itoa()
+; Ex.:
+; mov ax, 3141
+; lea bx, String (em que String e db 10 dup (?)) (o dup e pra ele saber que e pra reservar 100 bytes e o (?) diz que pode deixar o lixo de memoria)
+; call sprintf_w
+; -> string recebe "3141",0
+sprintf_w	proc	near
+
+	mov	sw_n,ax		; void sprintf_w(char *string, WORD n) {
+
+	mov	cx,5		; k=5;
+	
+	mov	sw_m,10000	; m=10000;
+	
+	mov	sw_f,0		; f=0;
+	
+sw_do:				; do {
+
+	mov	dx,0		;	quociente = n / m : resto = n % m;	// Usar instrução DIV
+	mov	ax,sw_n
+	div	sw_m
+	
+				;	if (quociente || f) {
+				;		*string++ = quociente+'0'
+				;		f = 1;
+				;	}
+	cmp	al,0
+	jne	sw_store
+	cmp	sw_f,0
+	je	sw_continue
+sw_store:
+	add	al,'0'
+	mov	[bx],al
+	inc	bx
+	
+	mov	sw_f,1
+sw_continue:
+	
+	mov	sw_n,dx		;	n = resto;
+	
+	mov	dx,0		;	m = m/10;
+	mov	ax,sw_m
+	mov	bp,10
+	div	bp
+	mov	sw_m,ax
+	
+	dec	cx		;	--k;
+	
+	cmp	cx,0		; } while(k);
+	jnz	sw_do
+
+				; if (!f)
+				;	*string++ = '0';
+	cmp	sw_f,0
+	jnz	sw_continua2
+	mov	[bx],'0'
+	inc	bx
+sw_continua2:
+
+	mov	byte ptr[bx],0	;	*string = '\0';
+				; }
+	ret			; return;
+		
+sprintf_w	endp
+
+; fopen: String (dx) -> File* (bx) Boolean (CF)		(Passa o File* para o ax tambem, mas por algum motivo ele move pro bx)
+; Obj.: Dado o caminho para um arquivo, devolve o ponteiro desse arquivo e define CF como 0 se o processo deu certo
+; Ex.:
+; lea dx, fileName		(em que fileName eh "temaDeCasa/feet/feet1.png",0) (Talvez a orientacao das barras varie com o sistema operacional, na duvida coloca tudo dentro de WORK pra poder usar so o nome do arquivo)
+; call fopen
+; -> bx recebe a imagem e CF (carry flag) nao ativa
+; ou -> bx recebe lixo e CF ativa
+fopen	proc	near
+
+	mov	al,0
+	mov	ah,3dh
+	int	21h
+	mov	bx,ax
+	ret
+	
+fopen	endp
+
+; fcreate: String (dx) -> File* (bx) Boolean (CF)
+; Obj.: Dado o caminho para um arquivo, cria um novo arquivo com dado nome em tal caminho e devolve seu ponteiro, define CF como 0 se o processo deu certo
+; Ex.:
+; lea dx, fileName		(em que fileName eh "fatos/porQueChicoEhOMelhor.txt",0) (Talvez a orientacao das barras varie com o sistema operacional, na duvida coloca tudo dentro de WORK pra poder usar so o nome do arquivo)
+; call fcreate
+; -> bx recebe o txt e CF (carry flag) nao ativa
+; ou -> bx recebe lixo e CF ativa
+ fcreate	proc	near
+
+	mov	cx,0
+	mov	ah,3ch
+	int	21h
+	mov	bx,ax
+	ret
+
+fcreate	endp
+
+; fclose: File* (bx) -> Boolean (CF)
+; Obj.: evitar um memory leak fechando o arquivo
+; Ex.:
+; mov bx, filePtr	(em que filePtr eh um ponteiro retornado por fopen/fcreate)
+; call fclose
+; -> Se deu certo, CF == 0
+; (Recomendo zerar o filePtr pra voce nao fazer merda)
+fclose	proc	near
+
+	mov	ah,3eh
+	int	21h
+	ret
+
+fclose	endp
+
+; getChar: File* (bx) -> Char (dl) Inteiro (AX) Boolean (CF)
+; Obj.: Dado um arquivo, devolve um caractere, a posicao do cursor e define CF como 0 se a leitura deu certo (diferente do getchar() do C, mais pra um getc(FILE*))
+; Ex.:
+; mov bx, filePtr	(em que filePtr eh um ponteiro retornado por fopen/fcreate)
+; call getChar
+; -> char em dl e cursor em AX se CF == 0
+; senao, deu ruim
+getChar	proc	near
+
+	mov	ah,3fh
+	mov	cx,1
+	lea	dx,FileBuffer
+	int	21h
+	mov	dl,FileBuffer
+	ret
+
+getChar	endp
+
+; setChar: File* (bx) Char (dl) -> Inteiro (ax) Boolean (CF)
+; Obj.: Dado um arquivo e um caractere, escreve esse caractere no arquivo e devolve a posicao do cursor e define CF como 0 se a leitura deu certo
+; Ex.:
+; mov bx, filePtr	(em que filePtr eh um ponteiro retornado por fopen/fcreate)
+; call setChar
+; -> posicao do cursor em AX e CF == 0 se deu certo
+setChar	proc	near
+
+	mov	ah,40h
+	mov	cx,1
+	mov	FileBuffer,dl
+	lea	dx,FileBuffer
+	int	21h
+	ret
+
+setChar	endp	
 
 ; ReadString: String (bx) Inteiro (cx) -> void
 ; Obj.: dada uma string e um numero, pega input do teclado e guarda nessa string ate encontrar um enter ou ter pego o numero passado de caracteres
@@ -416,159 +573,6 @@ RDSTR_B:
 		jmp		RDSTR_1
 
 ReadString	endp
-
-; sprintf_w: Inteiro (ax) String (bx) -> void
-; Obj.: dado um numero e uma string, transforma o numero em ascii e salva na string dada, quase um itoa()
-; Ex.:
-; mov ax, 3141
-; lea bx, String (em que String e db 10 dup (?)) (o dup e pra ele saber que e pra reservar 100 bytes e o (?) diz que pode deixar o lixo de memoria)
-; call sprintf_w
-; -> string recebe "3141",0
-sprintf_w	proc	near
-
-;void sprintf_w(char *string, WORD n) {
-	mov		sw_n,ax
-
-;	k=5;
-	mov		cx,5
-	
-;	m=10000;
-	mov		sw_m,10000
-	
-;	f=0;
-	mov		sw_f,0
-	
-;	do {
-sw_do:
-
-;		quociente = n / m : resto = n % m;	// Usar instruo DIV
-	mov		dx,0
-	mov		ax,sw_n
-	div		sw_m
-	
-;		if (quociente || f) {
-;			*string++ = quociente+'0'
-;			f = 1;
-;		}
-	cmp		al,0
-	jne		sw_store
-	cmp		sw_f,0
-	je		sw_continue
-sw_store:
-	add		al,'0'
-	mov		[bx],al
-	inc		bx
-	
-	mov		sw_f,1
-sw_continue:
-	
-;		n = resto;
-	mov		sw_n,dx
-	
-;		m = m/10;
-	mov		dx,0
-	mov		ax,sw_m
-	mov		bp,10
-	div		bp
-	mov		sw_m,ax
-	
-;		--k;
-	dec		cx
-	
-;	} while(k);
-	cmp		cx,0
-	jnz		sw_do
-
-;	if (!f)
-;		*string++ = '0';
-	cmp		sw_f,0
-	jnz		sw_continua2
-	mov		[bx],'0'
-	inc		bx
-sw_continua2:
-
-
-;	*string = '\0';
-	mov		byte ptr[bx],0
-		
-;}
-	ret
-		
-sprintf_w	endp
-
-; fopen: String (dx) -> File* (bx) Boolean (CF)		(Passa o File* para o ax tambem, mas por algum motivo ele move pro bx)
-; Obj.: Dado o caminho para um arquivo, devolve o ponteiro desse arquivo e define CF como 0 se o processo deu certo
-; Ex.:
-; lea dx, fileName		(em que fileName eh "temaDeCasa/feet/feet1.png",0) (Talvez a orientacao das barras varie com o sistema operacional, na duvida coloca tudo dentro de WORK pra poder usar so o nome do arquivo)
-; call fopen
-; -> bx recebe a imagem e CF (carry flag) nao ativa
-; ou -> bx recebe lixo e CF ativa
-fopen	proc	near
-	mov		al,0
-	mov		ah,3dh
-	int		21h
-	mov		bx,ax
-	ret
-fopen	endp
-
-; fcreate: String (dx) -> File* (bx) Boolean (CF)
-; Obj.: Dado o caminho para um arquivo, cria um novo arquivo com dado nome em tal caminho e devolve seu ponteiro, define CF como 0 se o processo deu certo
-; Ex.:
-; lea dx, fileName		(em que fileName eh "fatos/porQueChicoEhOMelhor.txt",0) (Talvez a orientacao das barras varie com o sistema operacional, na duvida coloca tudo dentro de WORK pra poder usar so o nome do arquivo)
-; call fcreate
-; -> bx recebe o txt e CF (carry flag) nao ativa
-; ou -> bx recebe lixo e CF ativa
- fcreate	proc	near
-	mov		cx,0
-	mov		ah,3ch
-	int		21h
-	mov		bx,ax
-	ret
-fcreate	endp
-
-; fclose: File* (bx) -> Boolean (CF)
-; Obj.: evitar um memory leak fechando o arquivo
-; Ex.:
-; mov bx, filePtr	(em que filePtr eh um ponteiro retornado por fopen/fcreate)
-; call fclose
-; -> Se deu certo, CF == 0
-; (Recomendo zerar o filePtr pra voce nao fazer merda)
-fclose	proc	near
-	mov		ah,3eh
-	int		21h
-	ret
-fclose	endp
-
-; getChar: File* (bx) -> Char (dl) Inteiro (AX) Boolean (CF)
-; Obj.: Dado um arquivo, devolve um caractere, a posicao do cursor e define CF como 0 se a leitura deu certo (diferente do getchar() do C, mais pra um getc(FILE*))
-; Ex.:
-; mov bx, filePtr	(em que filePtr eh um ponteiro retornado por fopen/fcreate)
-; call getChar
-; -> char em dl e cursor em AX se CF == 0
-; senao, deu ruim
-getChar	proc	near
-	mov		ah,3fh
-	mov		cx,1
-	lea		dx,FileBuffer
-	int		21h
-	mov		dl,FileBuffer
-	ret
-getChar	endp
-
-; setChar: File* (bx) Char (dl) -> Inteiro (ax) Boolean (CF)
-; Obj.: Dado um arquivo e um caractere, escreve esse caractere no arquivo e devolve a posicao do cursor e define CF como 0 se a leitura deu certo
-; Ex.:
-; mov bx, filePtr	(em que filePtr eh um ponteiro retornado por fopen/fcreate)
-; call setChar
-; -> posicao do cursor em AX e CF == 0 se deu certo
-setChar	proc	near
-	mov		ah,40h
-	mov		cx,1
-	mov		FileBuffer,dl
-	lea		dx,FileBuffer
-	int		21h
-	ret
-setChar	endp	
 
 ; gets: String (bx) -> String (bx)
 ; Obj.: Lê do teclado e coloca em em uma String no bx	(Honestamente recomendo deletar essa e usar o ReadString, essa funcao eh uma loucura)

@@ -29,10 +29,15 @@ TENSAO_ASCII	db	"127",0		; Tensão padrão em ASCII
 
 TENSAO		db	0		; Tensão
 
-ERRO_OPCAO1	db	"Opcao [-"
-ERRO_OPCAO2	db	" ] sem parametro",CR,LF,0	; Mensagem de erro para opção inválida
+ENTER		db	CR,LF,0		; String para pular linha
+
+OPCAO		db	"Opcao [-",0
+OPCAO2		db	" ] ",0
+ERRO_OPCAO	db	" ] sem parametro",CR,LF,0	; Mensagem de erro para opção inválida
 
 ERRO_TENSAO	db	"Parametro da opcao [-v] deve ser 127 ou 220",CR,LF,0	; Mensagem de erro para tensão inválida
+
+ERRO_ARQUIVO	db	"Erro ao abrir arquivo",CR,LF,0	; Mensagem de erro para arquivo
 
 ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inválida
 ERRO_CONTEUDO	db	"invalido: ",0	; Mensagem de erro para conteúdo inválido
@@ -180,40 +185,58 @@ fim_nome:
 
 fim_linha:
 
+	; Converte tensão para inteiro
+
 	lea	bx,TENSAO_ASCII
 	call	atoi
+
+	mov	TENSAO,ax
+
+	; Verifica valor da tensão
+
 	cmp	ax,127
 	je	tensao_ok
+
 	cmp	ax,220
 	jne	erro_v
 
 tensao_ok:
 
-	lea	bx,FILE_IN
-	call    printf_s
+	; Imprime os parâmetros considerados
 
-	lea	bx,FILE_OUT
-	call    printf_s
+	mov	al,'i'
+	lea	cx,FILE_IN
+	call	print_param
 
-	lea	bx,TENSAO_ASCII
-	call    printf_s
+	mov	al,'o'
+	lea	cx,FILE_OUT
+	call	print_param
+
+	mov	al,'v'
+	lea	cx,TENSAO_ASCII
+	call	print_param
 
 	jmp	abre_arquivo
 
 erro_sem_parametro:
 
-	lea	di,ERRO_OPCAO2
+	; Erro: opção sem parâmetro
+
+	lea	di,ERRO_OPCAO
 
 	mov	al,dl
 	stosb
 
-	lea	bx,ERRO_OPCAO1
-
+	lea	bx,OPCAO
+	call    printf_s
+	lea	bx,ERRO_OPCAO
 	call    printf_s
 
 	jmp	fim
 
 erro_v:
+
+	; Erro: valor da tensão inválido
 
 	lea	bx,ERRO_TENSAO
 	call    printf_s
@@ -228,17 +251,20 @@ abre_arquivo:
 	call	fopen
 	jc	erro_abre_arquivo
 
-	mov	bx,ax
-
 	; Abre o arquivo de saída
 
 	lea	dx,FILE_OUT
 	call	fcreate
 	jc	erro_abre_arquivo
 
-	mov	bx,ax
+	jmp	fim
 
-	; Lê o arquivo de entrada e escreve no arquivo de saída
+erro_abre_arquivo:
+
+	lea	bx,ERRO_ARQUIVO
+	call    printf_s
+
+	jmp	fim
 
 fim:
 
@@ -276,6 +302,25 @@ p_str_e:
 
 	ret
 percorre_str_espaco	endp
+
+; print_param: Char (al) String (cx) -> void
+; Obj.: Dado uma opção e uma parâmetro, escreve o parâmetro da opção na tela
+print_param	proc	near
+
+	lea	di,OPCAO2
+	stosb
+	lea	bx,OPCAO
+	call	printf_s
+	lea	bx,OPCAO2
+	call	printf_s
+	mov	bx,cx
+	call	printf_s
+	lea	bx,ENTER
+	call	printf_s
+
+	ret
+
+print_param	endp
 
 ; atoi: String (bx) -> Inteiro (ax)
 ; Obj.: recebe uma string e transforma em um inteiro
@@ -407,7 +452,7 @@ fopen	proc	near
 	int	21h
 	mov	bx,ax
 	ret
-	
+
 fopen	endp
 
 ; fcreate: String (dx) -> File* (bx) Boolean (CF)

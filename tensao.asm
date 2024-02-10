@@ -96,16 +96,17 @@ percorre_linha:
 	
 	call	percorre_str_espaco
 	jc	fim_linha
-	
-	mov	al,'-'	; Verifica se tem um '-' depois do espaço
-	scasb
 
+	mov	al,[di]
+	inc	di
+
+	cmp	al,0
+	je	fim_linha
+
+	cmp	al,'-'
 	je	verifica_opcao1
 
-	loop	percorre_linha
-
-	cmp     cx,0
-	je	fim_linha
+	jmp	percorre_linha
 
 verifica_opcao1:
 
@@ -146,39 +147,42 @@ salva_opcao:
 	call	percorre_str_espaco
 	jc	erro_sem_parametro
 	
-	mov	al,'-'	; Verifica se tem um '-' depois do espaço
-	scasb
+	mov	al,[di]
+	inc	di
+
+	cmp	al,0
+	je	erro_sem_parametro
+
+	cmp	al,'-'
 	je	erro_sem_parametro
 
 	dec	di	; Ajusta o ponteiro para o início do parâmetro
-	inc	cx
 
 	mov	si,di
-	push	cx	; Salva o tamanho restante da string, para uso futuro
-	mov	bx,cx
 
 	; Salva o parâmetro da opção
 
 	xor	cx,cx
 
 salva_nome:
-	dec	bx
-	cmp	bx,0
+
+	mov	al,[di]
+	inc	di
+
+	cmp	al,' '
 	je	fim_nome
 
-	mov	al,' '	; Procura por um espaço
-	scasb
+	cmp	al,0
 	je	fim_nome
+
 	inc	cx
 	jmp	salva_nome
 
 fim_nome:
-	pop	ax	; Restaura o tamanho restante da string em ax
 	pop	di
 
 	rep     movsb
 
-	mov	cx,ax	; Restaura o tamanho restante da string em cx
 	mov	di,si
 
 	loop	percorre_linha
@@ -190,7 +194,7 @@ fim_linha:
 	lea	bx,TENSAO_ASCII
 	call	atoi
 
-	mov	TENSAO,ax
+	mov	TENSAO,al
 
 	; Verifica valor da tensão
 

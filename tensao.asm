@@ -75,15 +75,12 @@ FileBuffer	db	10 dup (?)		; Usada dentro do setChar e getChar
 	mov	si,80h	; Obtém o tamanho do string da linha de comando e coloca em CX
 	mov	ch,0
 	mov	cl,[si]
-	mov	ax,cx	; Salva o tamanho do string em AX, para uso futuro
 
 	mov	si,81h	; Inicializa o ponteiro de origem
 
 	lea	di,CMDLINE	; Inicializa o ponteiro de destino
 
 	rep	movsb
-
-	mov	cx,ax
 
 	pop 	es	; retorna as informações dos registradores de segmentos
 	pop	ds
@@ -255,13 +252,7 @@ abre_arquivo:
 	call	fopen
 	jc	erro_abre_arquivo
 
-	; Abre o arquivo de saída
-
-	lea	dx,FILE_OUT
-	call	fcreate
-	jc	erro_abre_arquivo
-
-	jmp	fim
+	jmp	processa_arquivo
 
 erro_abre_arquivo:
 
@@ -269,6 +260,12 @@ erro_abre_arquivo:
 	call    printf_s
 
 	jmp	fim
+
+processa_arquivo:
+
+	
+
+
 
 fim:
 

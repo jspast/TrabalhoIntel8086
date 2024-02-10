@@ -87,15 +87,15 @@ FileBuffer	db	10 dup (?)		; Usada dentro do setChar e getChar
 	mov     ax,ds
 	mov     es,ax
 
-	lea     di,CMDLINE
+	lea     si,CMDLINE
 
 percorre_linha:
 	
 	call	percorre_str_espaco
 	jc	fim_linha
 
-	mov	al,[di]
-	inc	di
+	mov	al,[si]
+	inc	si
 
 	cmp	al,0
 	je	fim_linha
@@ -109,43 +109,34 @@ verifica_opcao1:
 
 	; Verifica qual a opção depois do '-'
 
-	mov	dl,[di]
+	mov	dl,[si]
 	cmp	dl,'i'
 	jne	verifica_opcao3
-	mov     si,di
 	lea	di,FILE_IN
 	jmp	salva_opcao
 
 verifica_opcao3:
 	cmp	dl,'o'
 	jne	verifica_opcao4
-	mov     si,di
 	lea	di,FILE_OUT
 	jmp	salva_opcao
 
 verifica_opcao4:
 	cmp	dl,'v'
 	je 	verifica_opcao5
-	loop	percorre_linha
-	jmp	fim_linha
+	jmp	percorre_linha
 	
 verifica_opcao5:
-	mov     si,di
 	lea	di,TENSAO_ASCII
 	
 salva_opcao:
 
 	; Verifica o parâmetro da opção
 
-	push	di
-
-	mov	di,si
-
 	call	percorre_str_espaco
 	jc	erro_sem_parametro
 	
-	mov	al,[di]
-	inc	di
+	mov	al,[si]
 
 	cmp	al,0
 	je	erro_sem_parametro
@@ -153,36 +144,15 @@ salva_opcao:
 	cmp	al,'-'
 	je	erro_sem_parametro
 
-	dec	di	; Ajusta o ponteiro para o início do parâmetro
-
-	mov	si,di
-
 	; Salva o parâmetro da opção
 
-	xor	cx,cx
-
-salva_nome:
-
-	mov	al,[di]
-	inc	di
-
-	cmp	al,' '
-	je	fim_nome
-
-	cmp	al,0
-	je	fim_nome
-
-	inc	cx
-	jmp	salva_nome
-
-fim_nome:
-	pop	di
+	call	strlen
 
 	rep     movsb
 
-	mov	di,si
+	mov	byte ptr[di],0	; Coloca 0 no final da string
 
-	loop	percorre_linha
+	jmp	percorre_linha
 
 fim_linha:
 
@@ -252,7 +222,7 @@ abre_arquivo:
 	call	fopen
 	jc	erro_abre_arquivo
 
-	jmp	processa_arquivo
+	jmp	fim
 
 erro_abre_arquivo:
 
@@ -260,12 +230,6 @@ erro_abre_arquivo:
 	call    printf_s
 
 	jmp	fim
-
-processa_arquivo:
-
-	
-
-
 
 fim:
 
@@ -275,34 +239,80 @@ fim:
 ; FUNÇÕES
 ;------------------------------------------
 
-; percorre_str_espaco: String (di) Inteiro (cx) -> String (di) Boolean (CF)
-; Obj.: Dada uma string e seu tamanho, percorre a string até encontrar o primeiro caractere depois de um espaço
+; percorre_str_espaco: String (si) -> String (si) Boolean (CF)
+; Obj.: Dada uma string, percorre a string até encontrar o primeiro caractere depois de um espaço
 ; Se encontrar, retorna o ponteiro para esse caractere e define CF como 0
 ; Se não encontrar, retorna o ponteiro para o final da string e define CF como 1
 percorre_str_espaco	proc	near
 
-	mov	al,' '	; Procura por um espaço
-	repne	scasb
+	; Procura por um espaço
 
-	cmp     cx,0
+	mov	al,[si]
+	inc	si
+
+	cmp	al,' '
+	je	p_str_1
+
+	cmp	al,0
 	je	p_str_e
 
-	repe	scasb	; Vai até o último espaço
+p_str_1:
 
-	cmp     cx,0
+	; Procura por um caractere diferente de espaço
+
+	mov	al,[si]
+	inc	si
+
+	cmp	al,' '
+	je	p_str_1
+
+	cmp	al,0
 	je	p_str_e
 
-	dec	di	; Ajusta o ponteiro para depois do último espaço
-	inc	cx
+	dec	si	; Ajusta o ponteiro para o primeiro caractere depois do espaço
 
+	clc	; Define CF como 0
 	ret
 
 p_str_e:
 
 	stc	; Define CF como 1
+	ret
+
+percorre_str_espaco	endp
+
+; strlen: String (si) -> Inteiro (cx)
+; Obj.: Dada uma string, retorna o tamanho da string, sem alterar o ponteiro da string
+strlen	proc	near
+
+	; Inicializa o contador
+
+	xor	cx,cx
+
+	push	si
+
+strlen_1:
+
+	; Conta o tamanho da string
+
+	mov	al,[si]
+	inc	si
+
+	cmp	al,' '
+	je	fim_strlen
+
+	cmp	al,0
+	je	fim_strlen
+
+	inc	cx
+	jmp	strlen_1
+
+fim_strlen:
+	pop	si
 
 	ret
-percorre_str_espaco	endp
+
+strlen	endp
 
 ; print_param: Char (al) String (cx) -> void
 ; Obj.: Dado uma opção e uma parâmetro, escreve o parâmetro da opção na tela

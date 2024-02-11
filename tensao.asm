@@ -11,8 +11,11 @@
 CR              equ	0Dh  	; Carriage Return (Enter)
 LF              equ	0Ah  	; Line Feed ('\n')
 TAB		equ	09h	; Tabulação
+
 MAXCMD          equ	100	; Tamanho máximo da linha de comando
 MAXARQ		equ	100	; Tamanho máximo do nome do arquivo
+
+BUFFER_FILE	equ	100	; Tamanho do buffer para leitura de arquivo
 
 ;------------------------------------------
 ; DADOS
@@ -48,23 +51,22 @@ ERRO_ARQUIVO	db	"Erro ao abrir arquivo",CR,LF,0	; Mensagem de erro para arquivo
 ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inválida
 ERRO_CONTEUDO	db	" invalido: ",0	; Mensagem de erro para conteúdo inválido
 
-;------------------------------------------
-; CÓDIGO
-;------------------------------------------
-
-; Variavel e constante necessarias para gets funcionar. Recomendo deletar elas e a gets e usar a ReadString no lugar.
-MAXSTRING 	equ	200 			; Necessario para gets funcionar (loucura, eu sei), pode alterar o valor
-String		db	MAXSTRING dup (?)	; Usado dentro da funcao gets. Sim, ela nao funciona sem. Sim, isso eh ma pratica.
+; Variáveis necessarias para funções.
 
 sw_n	        dw	0			; Usada dentro da funcao sprintf_w
 sw_f    	db	0			; Usada dentro da funcao sprintf_w
 sw_m	        dw	0			; Usada dentro da funcao sprintf_w
-FileBuffer	db	100 dup (?)		; Usada dentro do setChar e getChar
+
+FileBuffer	db	BUFFER_FILE dup (?)	; Usada dentro do setChar e getChar
+
+;------------------------------------------
+; CÓDIGO
+;------------------------------------------
 
 .code
 .startup
 
-; Obtém os argumentos da linha de comando
+	; Obtém os argumentos da linha de comando
 
 	CLD	; Limpa o direction flag
 
@@ -683,129 +685,6 @@ setChar	proc	near
 	int	21h
 	ret
 
-setChar	endp	
-
-; ReadString: String (bx) Inteiro (cx) -> void
-; Obj.: dada uma string e um numero, pega input do teclado e guarda nessa string ate encontrar um enter ou ter pego o numero passado de caracteres
-; Ex.:
-; mov cx, 10        (vai pegar no maximo 10 caracteres)
-; lea bx, buffer    (em que buffer e db 100 dup (?)) (o dup e pra ele saber que e pra reservar 100 bytes e o (?) diz que pode deixar o lixo de memoria)
-; call ReadString   (Eu queria saber o que fez o Cechin decidir "Essa funcao aqui em especifico vai comecar com letra maiuscula")
-; -> Ai o cara digita "Amo intel!" e ele quebra porque tem mais de 10 caracteres
-; -> Ou ele digita "Amo Java!", enter, ai funciona e buffer fica com "Amo Java!",0 (sem o CR ou LF)
-ReadString	proc	near
-
-		;Pos = 0
-		mov		dx,0
-
-RDSTR_1:
-		;while(1) { (while(1) deveria ser crime federal, o negocio e for(;;))
-		;	al = Int21(7)		// Espera pelo teclado
-		mov		ah,7
-		int		21H
-
-		;	if (al==CR) {
-		cmp		al,0DH
-		jne		RDSTR_A
-
-		;		*S = '\0'
-		mov		byte ptr[bx],0
-		;		return
-		ret
-		;	}
-
-RDSTR_A:
-		;	if (al==BS) {
-		cmp		al,08H
-		jne		RDSTR_B
-
-		;		if (Pos==0) continue;
-		cmp		dx,0
-		jz		RDSTR_1
-
-		;		Print (BS, SPACE, BS)
-		push	dx
-		
-		mov		dl,08H
-		mov		ah,2
-		int		21H
-		
-		mov		dl,' '
-		mov		ah,2
-		int		21H
-		
-		mov		dl,08H
-		mov		ah,2
-		int		21H
-		
-		pop		dx
-
-		;		--s
-		dec		bx
-		;		++M
-		inc		cx
-		;		--Pos
-		dec		dx
-		
-		;	}
-		jmp		RDSTR_1
-
-RDSTR_B:
-		;	if (M==0) continue
-		cmp		cx,0
-		je		RDSTR_1
-
-		;	if (al>=SPACE) {
-		cmp		al,' '
-		jl		RDSTR_1
-
-		;		*S = al
-		mov		[bx],al
-
-		;		++S
-		inc		bx
-		;		--M
-		dec		cx
-		;		++Pos
-		inc		dx
-
-		;		Int21 (s, AL)
-		push	dx
-		mov		dl,al
-		mov		ah,2
-		int		21H
-		pop		dx
-
-		;	}
-		;}
-		jmp		RDSTR_1
-
-ReadString	endp
-
-; gets: String (bx) -> String (bx)
-; Obj.: Lê do teclado e coloca em em uma String no bx	(Honestamente recomendo deletar essa e usar o ReadString, essa funcao eh uma loucura)
-; Ex.:
-; lea bx, msgImportante		(em que msgImportante eh db 256 dup (?)) (o dup e pra ele saber que eh pra reservar 100 bytes e o (?) diz que pode deixar o lixo de memoria)
-; call gets
-; -> cara escreve "Adoro o Grellert" e mensagem vai para o BX e eh escrita na String passada, parece nao pegar Enter e \n
-gets	proc	near
-	push	bx
-
-	mov		ah,0ah						; L� uma linha do teclado
-	lea		dx,String
-	mov		byte ptr String, MAXSTRING-4	; 2 caracteres no inicio e um eventual CR LF no final
-	int		21h
-
-	lea		si,String+2					; Copia do buffer de teclado para o FileName
-	pop		di
-	mov		cl,String+1
-	mov		ch,0
-	mov		ax,ds						; Ajusta ES=DS para poder usar o MOVSB
-	mov		es,ax
-	rep 	movsb
-
-	mov		byte ptr es:[di],0			; Coloca marca de fim de string
-	ret
-gets	endp
+setChar	endp
 
 end

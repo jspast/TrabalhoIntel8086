@@ -10,6 +10,7 @@
 
 CR              equ	0Dh  	; Carriage Return (Enter)
 LF              equ	0Ah  	; Line Feed ('\n')
+TAB		equ	09h	; Tabulação
 MAXCMD          equ	100	; Tamanho máximo da linha de comando
 MAXARQ		equ	100	; Tamanho máximo do nome do arquivo
 
@@ -25,9 +26,14 @@ FILE_IN		db	"a.in",0	; Nome do arquivo de entrada padrão
 FILE_OUT	db      "a.out",0	; Nome do arquivo de saída padrão
 		db	MAXARQ dup(0)
 
-TENSAO_ASCII	db	"127",0		; Tensão padrão em ASCII
+TENSAO_STR	db	"127",0		; Tensão padrão em ASCII
+TENSAO		db	0		; Tensão em inteiro
 
-TENSAO		db	0		; Tensão
+TENSAO_BUF_STR	db	4 dup(0)	; Buffer para armazenar a tensão lida do arquivo
+TENSAO_BUF	db	0		; Buffer para tensão em inteiro
+
+SEGUNDOS	dw	0		; Contador de segundos (linhas do arquivo)
+SEGUNDOS_STR	db	6 dup(0)	; contador de segundos em ASCII
 
 ENTER		db	CR,LF,0		; String para pular linha
 
@@ -40,7 +46,7 @@ ERRO_TENSAO	db	"Parametro da opcao [-v] deve ser 127 ou 220",CR,LF,0	; Mensagem 
 ERRO_ARQUIVO	db	"Erro ao abrir arquivo",CR,LF,0	; Mensagem de erro para arquivo
 
 ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inválida
-ERRO_CONTEUDO	db	"invalido: ",0	; Mensagem de erro para conteúdo inválido
+ERRO_CONTEUDO	db	" invalido: ",0	; Mensagem de erro para conteúdo inválido
 
 ;------------------------------------------
 ; CÓDIGO
@@ -53,7 +59,7 @@ String		db	MAXSTRING dup (?)	; Usado dentro da funcao gets. Sim, ela nao funcion
 sw_n	        dw	0			; Usada dentro da funcao sprintf_w
 sw_f    	db	0			; Usada dentro da funcao sprintf_w
 sw_m	        dw	0			; Usada dentro da funcao sprintf_w
-FileBuffer	db	10 dup (?)		; Usada dentro do setChar e getChar
+FileBuffer	db	100 dup (?)		; Usada dentro do setChar e getChar
 
 .code
 .startup
@@ -92,13 +98,13 @@ FileBuffer	db	10 dup (?)		; Usada dentro do setChar e getChar
 percorre_linha:
 	
 	call	percorre_str_espaco
-	jc	fim_linha
+	jc	fim_cmd
 
 	mov	al,[si]
 	inc	si
 
 	cmp	al,0
-	je	fim_linha
+	je	fim_cmd
 
 	cmp	al,'-'
 	je	verifica_opcao1
@@ -127,7 +133,7 @@ verifica_opcao4:
 	jmp	percorre_linha
 	
 verifica_opcao5:
-	lea	di,TENSAO_ASCII
+	lea	di,TENSAO_STR
 	
 salva_opcao:
 
@@ -154,11 +160,11 @@ salva_opcao:
 
 	jmp	percorre_linha
 
-fim_linha:
+fim_cmd:
 
 	; Converte tensão para inteiro
 
-	lea	bx,TENSAO_ASCII
+	lea	bx,TENSAO_STR
 	call	atoi
 
 	mov	TENSAO,al
@@ -184,7 +190,7 @@ tensao_ok:
 	call	print_param
 
 	mov	al,'v'
-	lea	cx,TENSAO_ASCII
+	lea	cx,TENSAO_STR
 	call	print_param
 
 	jmp	abre_arquivo
@@ -222,7 +228,9 @@ abre_arquivo:
 	call	fopen
 	jc	erro_abre_arquivo
 
-	jmp	fim
+	xor	ch,ch
+
+	jmp	processa_arquivo
 
 erro_abre_arquivo:
 
@@ -230,6 +238,93 @@ erro_abre_arquivo:
 	call    printf_s
 
 	jmp	fim
+
+
+tensao2:
+
+	call	getChar
+	jc	fim_arquivo
+
+	cmp	dl,','
+	je	fim_tensao
+
+	cmp	dl,' '
+	je	fim_tensao
+
+	cmp	dl,TAB
+	je	fim_tensao
+
+	cmp	dl,CR
+	je	fim_linha
+
+	cmp	dl,LF
+	je	fim_linha
+
+	call	salva_dig_tensao
+	jc	fim_tensao
+
+	jmp	tensao2
+
+processa_arquivo:
+tensao1:
+	call	getChar
+	jc	fim_arquivo
+
+	cmp	dl,' '
+	je	tensao1
+
+	cmp	dl,TAB
+	je	tensao1
+
+	cmp	dl,CR
+	je	tensao1
+
+	cmp	dl,LF
+	je	tensao1
+
+	call	salva_dig_tensao
+
+	jmp	tensao2
+
+fim_linha:
+
+	inc	SEGUNDOS
+
+fim_tensao:
+
+	push	bx
+	lea	bx,TENSAO_BUF_STR
+
+	call	verifica_tensao
+	jc	erro_leitura
+
+	call	atoi
+
+erro_leitura:
+
+	lea	bx,ERRO_LINHA
+	call	printf_s
+
+	mov	ax,SEGUNDOS
+	inc	ax
+	lea	bx,SEGUNDOS_STR
+	call	sprintf_w
+	lea	bx,SEGUNDOS_STR
+	call	printf_s
+
+	lea	bx,ERRO_CONTEUDO
+	call	printf_s
+
+	lea	bx,TENSAO_BUF_STR
+	call	printf_s
+
+
+fim_arquivo:
+
+	; Fecha o arquivo
+
+	pop	bx
+	call	fclose
 
 fim:
 
@@ -332,6 +427,58 @@ print_param	proc	near
 	ret
 
 print_param	endp
+
+; salva_dig_tensao: Char (dl) Inteiro (ch) -> Boolean (CF)
+; Obj.: Dado um dígito e um contador de dígitos, salva esse dígito no buffer da tensão e incrmenta o contador
+; Se chegou em 3 dígitos, define CF como 1
+; Se não chegou, define CF como 0
+salva_dig_tensao	proc	near
+
+	mov	al,dl
+
+	xor	cl,cl
+	mov	cl,ch
+
+	lea	di,[TENSAO_BUF_STR+cx]
+	stosb
+
+	mov	ch,cl
+
+	inc	ch
+
+	cmp	ch,3
+	jne	sdt_ret
+
+	stc
+	ret
+
+sdt_ret:
+	clc
+	ret
+
+salva_dig_tensao	endp
+
+; verifica_tensao: String (bx) Inteiro (ch) -> Boolean (CF)
+; Obj.: Dada uma string e seu tamanho, verifica se a string é menor ou igual a "499"
+; Se for, define CF como 1
+; Se não for, define CF como 0
+verifica_tensao	proc	near
+
+	cmp	ch,3
+	jne	vt_ret
+
+	mov	dl,[bx]
+	cmp	dl,'5'
+	ja	vt_ret
+
+	clc
+	ret
+
+vt_ret:
+	stc
+	ret
+
+verifica_tensao	endp
 
 ; atoi: String (bx) -> Inteiro (ax)
 ; Obj.: recebe uma string e transforma em um inteiro
@@ -473,7 +620,7 @@ fopen	endp
 ; call fcreate
 ; -> bx recebe o txt e CF (carry flag) nao ativa
 ; ou -> bx recebe lixo e CF ativa
- fcreate	proc	near
+fcreate	proc	near
 
 	mov	cx,0
 	mov	ah,3ch
@@ -507,11 +654,16 @@ fclose	endp
 ; senao, deu ruim
 getChar	proc	near
 
+	push	cx
+
 	mov	ah,3fh
 	mov	cx,1
 	lea	dx,FileBuffer
 	int	21h
 	mov	dl,FileBuffer
+
+	pop	cx
+
 	ret
 
 getChar	endp

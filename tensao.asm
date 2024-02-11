@@ -1,4 +1,4 @@
-; Jo„o Speranza Pastorello - 00580242
+; Jo√£o Speranza Pastorello - 00580242
 
 .model small
 .stack
@@ -10,9 +10,9 @@
 
 CR              equ	0Dh  	; Carriage Return (Enter)
 LF              equ	0Ah  	; Line Feed ('\n')
-TAB		equ	09h	; TabulaÁ„o
-MAXCMD          equ	100	; Tamanho m·ximo da linha de comando
-MAXARQ		equ	100	; Tamanho m·ximo do nome do arquivo
+TAB		equ	09h	; Tabula√ß√£o
+MAXCMD          equ	100	; Tamanho m√°ximo da linha de comando
+MAXARQ		equ	100	; Tamanho m√°ximo do nome do arquivo
 
 ;------------------------------------------
 ; DADOS
@@ -20,17 +20,17 @@ MAXARQ		equ	100	; Tamanho m·ximo do nome do arquivo
 
 CMDLINE		db	MAXCMD dup(0)	; Buffer para armazenar a linha de comando
 
-FILE_IN		db	"a.in",0	; Nome do arquivo de entrada padr„o
+FILE_IN		db	"a.in",0	; Nome do arquivo de entrada padr√£o
 		db 	MAXARQ dup(0)
 
-FILE_OUT	db      "a.out",0	; Nome do arquivo de saÌda padr„o
+FILE_OUT	db      "a.out",0	; Nome do arquivo de sa√≠da padr√£o
 		db	MAXARQ dup(0)
 
-TENSAO_STR	db	"127",0		; Tens„o padr„o em ASCII
-TENSAO		db	0		; Tens„o em inteiro
+TENSAO_STR	db	"127",0		; Tens√£o padr√£o em ASCII
+TENSAO		db	0		; Tens√£o em inteiro
 
-TENSAO_BUF_STR	db	4 dup(0)	; Buffer para armazenar a tens„o lida do arquivo
-TENSAO_BUF	db	0		; Buffer para tens„o em inteiro
+TENSAO_BUF_STR	db	4 dup(0)	; Buffer para armazenar a tens√£o lida do arquivo
+TENSAO_BUF	db	0		; Buffer para tens√£o em inteiro
 
 SEGUNDOS	dw	0		; Contador de segundos (linhas do arquivo)
 SEGUNDOS_STR	db	6 dup(0)	; contador de segundos em ASCII
@@ -39,17 +39,17 @@ ENTER		db	CR,LF,0		; String para pular linha
 
 OPCAO		db	"Opcao [-",0
 OPCAO2		db	" ] ",0
-ERRO_OPCAO	db	" ] sem parametro",CR,LF,0	; Mensagem de erro para opÁ„o inv·lida
+ERRO_OPCAO	db	" ] sem parametro",CR,LF,0	; Mensagem de erro para op√ß√£o inv√°lida
 
-ERRO_TENSAO	db	"Parametro da opcao [-v] deve ser 127 ou 220",CR,LF,0	; Mensagem de erro para tens„o inv·lida
+ERRO_TENSAO	db	"Parametro da opcao [-v] deve ser 127 ou 220",CR,LF,0	; Mensagem de erro para tens√£o inv√°lida
 
 ERRO_ARQUIVO	db	"Erro ao abrir arquivo",CR,LF,0	; Mensagem de erro para arquivo
 
-ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inv·lida
-ERRO_CONTEUDO	db	" invalido: ",0	; Mensagem de erro para conte˙do inv·lido
+ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inv√°lida
+ERRO_CONTEUDO	db	" invalido: ",0	; Mensagem de erro para conte√∫do inv√°lido
 
 ;------------------------------------------
-; C”DIGO
+; C√ìDIGO
 ;------------------------------------------
 
 ; Variavel e constante necessarias para gets funcionar. Recomendo deletar elas e a gets e usar a ReadString no lugar.
@@ -64,13 +64,13 @@ FileBuffer	db	100 dup (?)		; Usada dentro do setChar e getChar
 .code
 .startup
 
-; ObtÈm os argumentos da linha de comando
+; Obt√©m os argumentos da linha de comando
 
 	CLD	; Limpa o direction flag
 
 	; Salva linha de comando em CMDLINE
 
-	push	ds      ; Salva as informaÁıes de segmentos
+	push	ds      ; Salva as informa√ß√µes de segmentos
 	push    es
 
 	mov     ax,ds   ; Troca DS com ES para poder usa o REP MOVSB
@@ -78,7 +78,7 @@ FileBuffer	db	100 dup (?)		; Usada dentro do setChar e getChar
 	mov     ds,bx
 	mov     es,ax
 
-	mov	si,80h	; ObtÈm o tamanho do string da linha de comando e coloca em CX
+	mov	si,80h	; Obt√©m o tamanho do string da linha de comando e coloca em CX
 	mov	ch,0
 	mov	cl,[si]
 
@@ -88,7 +88,7 @@ FileBuffer	db	100 dup (?)		; Usada dentro do setChar e getChar
 
 	rep	movsb
 
-	pop 	es	; retorna as informaÁıes dos registradores de segmentos
+	pop 	es	; retorna as informa√ß√µes dos registradores de segmentos
 	pop	ds
 	mov     ax,ds
 	mov     es,ax
@@ -113,7 +113,7 @@ percorre_linha:
 
 verifica_opcao1:
 
-	; Verifica qual a opÁ„o depois do '-'
+	; Verifica qual a op√ß√£o depois do '-'
 
 	mov	dl,[si]
 	cmp	dl,'i'
@@ -137,7 +137,7 @@ verifica_opcao5:
 	
 salva_opcao:
 
-	; Verifica o par‚metro da opÁ„o
+	; Verifica o par√¢metro da op√ß√£o
 
 	call	percorre_str_espaco
 	jc	erro_sem_parametro
@@ -150,7 +150,7 @@ salva_opcao:
 	cmp	al,'-'
 	je	erro_sem_parametro
 
-	; Salva o par‚metro da opÁ„o
+	; Salva o par√¢metro da op√ß√£o
 
 	call	strlen
 
@@ -162,14 +162,14 @@ salva_opcao:
 
 fim_cmd:
 
-	; Converte tens„o para inteiro
+	; Converte tens√£o para inteiro
 
 	lea	bx,TENSAO_STR
 	call	atoi
 
 	mov	TENSAO,al
 
-	; Verifica valor da tens„o
+	; Verifica valor da tens√£o
 
 	cmp	ax,127
 	je	tensao_ok
@@ -179,7 +179,7 @@ fim_cmd:
 
 tensao_ok:
 
-	; Imprime os par‚metros considerados
+	; Imprime os par√¢metros considerados
 
 	mov	al,'i'
 	lea	cx,FILE_IN
@@ -197,7 +197,7 @@ tensao_ok:
 
 erro_sem_parametro:
 
-	; Erro: opÁ„o sem par‚metro
+	; Erro: op√ß√£o sem par√¢metro
 
 	lea	di,ERRO_OPCAO
 
@@ -213,7 +213,7 @@ erro_sem_parametro:
 
 erro_v:
 
-	; Erro: valor da tens„o inv·lido
+	; Erro: valor da tens√£o inv√°lido
 
 	lea	bx,ERRO_TENSAO
 	call    printf_s
@@ -331,16 +331,16 @@ fim:
 .exit
 
 ;------------------------------------------
-; FUN«’ES
+; FUN√á√ïES
 ;------------------------------------------
 
 ; percorre_str_espaco: String (si) -> String (si) Boolean (CF)
-; Obj.: Dada uma string, percorre a string atÈ encontrar o primeiro caractere depois de um espaÁo
+; Obj.: Dada uma string, percorre a string at√© encontrar o primeiro caractere depois de um espa√ßo
 ; Se encontrar, retorna o ponteiro para esse caractere e define CF como 0
-; Se n„o encontrar, retorna o ponteiro para o final da string e define CF como 1
+; Se n√£o encontrar, retorna o ponteiro para o final da string e define CF como 1
 percorre_str_espaco	proc	near
 
-	; Procura por um espaÁo
+	; Procura por um espa√ßo
 
 	mov	al,[si]
 	inc	si
@@ -353,7 +353,7 @@ percorre_str_espaco	proc	near
 
 p_str_1:
 
-	; Procura por um caractere diferente de espaÁo
+	; Procura por um caractere diferente de espa√ßo
 
 	mov	al,[si]
 	inc	si
@@ -364,7 +364,7 @@ p_str_1:
 	cmp	al,0
 	je	p_str_e
 
-	dec	si	; Ajusta o ponteiro para o primeiro caractere depois do espaÁo
+	dec	si	; Ajusta o ponteiro para o primeiro caractere depois do espa√ßo
 
 	clc	; Define CF como 0
 	ret
@@ -410,7 +410,7 @@ fim_strlen:
 strlen	endp
 
 ; print_param: Char (al) String (cx) -> void
-; Obj.: Dado uma opÁ„o e uma par‚metro, escreve o par‚metro da opÁ„o na tela
+; Obj.: Dado uma op√ß√£o e uma par√¢metro, escreve o par√¢metro da op√ß√£o na tela
 print_param	proc	near
 
 	lea	di,OPCAO2
@@ -429,9 +429,9 @@ print_param	proc	near
 print_param	endp
 
 ; salva_dig_tensao: Char (dl) Inteiro (ch) -> Boolean (CF)
-; Obj.: Dado um dÌgito e um contador de dÌgitos, salva esse dÌgito no buffer da tens„o e incrmenta o contador
-; Se chegou em 3 dÌgitos, define CF como 1
-; Se n„o chegou, define CF como 0
+; Obj.: Dado um d√≠gito e um contador de d√≠gitos, salva esse d√≠gito no buffer da tens√£o e incrmenta o contador
+; Se chegou em 3 d√≠gitos, define CF como 1
+; Se n√£o chegou, define CF como 0
 salva_dig_tensao	proc	near
 
 	mov	al,dl
@@ -459,9 +459,9 @@ sdt_ret:
 salva_dig_tensao	endp
 
 ; verifica_tensao: String (bx) Inteiro (ch) -> Boolean (CF)
-; Obj.: Dada uma string e seu tamanho, verifica se a string È menor ou igual a "499"
+; Obj.: Dada uma string e seu tamanho, verifica se a string √© menor ou igual a "499"
 ; Se for, define CF como 1
-; Se n„o for, define CF como 0
+; Se n√£o for, define CF como 0
 verifica_tensao	proc	near
 
 	cmp	ch,3
@@ -549,7 +549,7 @@ sprintf_w	proc	near
 	
 sw_do:				; do {
 
-	mov	dx,0		;	quociente = n / m : resto = n % m;	// Usar instruÁ„o DIV
+	mov	dx,0		;	quociente = n / m : resto = n % m;	// Usar instru√ß√£o DIV
 	mov	ax,sw_n
 	div	sw_m
 	
@@ -783,7 +783,7 @@ RDSTR_B:
 ReadString	endp
 
 ; gets: String (bx) -> String (bx)
-; Obj.: LÍ do teclado e coloca em em uma String no bx	(Honestamente recomendo deletar essa e usar o ReadString, essa funcao eh uma loucura)
+; Obj.: L√™ do teclado e coloca em em uma String no bx	(Honestamente recomendo deletar essa e usar o ReadString, essa funcao eh uma loucura)
 ; Ex.:
 ; lea bx, msgImportante		(em que msgImportante eh db 256 dup (?)) (o dup e pra ele saber que eh pra reservar 100 bytes e o (?) diz que pode deixar o lixo de memoria)
 ; call gets
@@ -791,7 +791,7 @@ ReadString	endp
 gets	proc	near
 	push	bx
 
-	mov		ah,0ah						; Lù uma linha do teclado
+	mov		ah,0ah						; LÔøΩ uma linha do teclado
 	lea		dx,String
 	mov		byte ptr String, MAXSTRING-4	; 2 caracteres no inicio e um eventual CR LF no final
 	int		21h

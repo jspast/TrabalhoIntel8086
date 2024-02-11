@@ -44,6 +44,10 @@ SEGUNDOS	dw	0		; Contador de segundos (linhas do arquivo)
 SEGUNDOS_Q	dw	0		; Contador de segundos de tensão com qualidade
 SEGUNDOS_S	dw	0		; Contador de segundos sem tensão
 
+HORA_BUF	db	0
+MIN_BUF		db	0
+SEG_BUF		db	0
+
 TENSOES         db      0               ; Contador de número de tensões em uma linha
 TENSOES_Q	db	0		; Contador de tensões com qualidade em uma linha
 TENSOES_S	db	0		; Contador de tensões sem tensão em uma linha
@@ -62,6 +66,12 @@ ERRO_ARQUIVO	db	"Erro ao abrir arquivo",CR,LF,0	; Mensagem de erro para arquivo
 
 ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inválida
 ERRO_CONTEUDO	db	" invalido: ",0	; Mensagem de erro para conteúdo inválido
+
+TEMPO		db	"Tempo total de medicoes: ",0
+TEMPO_Q		db	"Tempo tensao de qualidade: ",0
+TEMPO_S		db	"Tempo sem tensao: ",0
+
+TEMPO_BUF	db	"  :  :  ",0
 
 ; Variáveis necessarias para funções.
 
@@ -242,6 +252,8 @@ abre_arquivo:
 	call	fopen
 	jc	erro_abre_arquivo
 
+	push	bx
+
 	xor	cx,cx
 
 	lea	di,LINHA_BUF
@@ -250,12 +262,16 @@ abre_arquivo:
 
 erro_abre_arquivo:
 
+	; Erro ao abrir arquivo
+
 	lea	bx,ERRO_ARQUIVO
 	call    printf_s
 
 	jmp	fim
 
 processa_arquivo:
+
+	; Copia linha do arquivo para LINHA_BUF
 
 	call	getChar
 	jc	fim_arquivo
@@ -289,6 +305,8 @@ fim_linha:
 
 verifica_fim_arquivo:
 
+	; Verifica se a linha é "fim"
+
 	lea	si,LINHA_BUF
 	mov	dl,[si]
 
@@ -321,9 +339,20 @@ letra3:
 
 salva_tensoes:
 
-	xor	cx,cx
+	; Salva e verifica as tensões da linha
+
+	mov	TENSOES,0
+	mov	TENSOES_Q,0
+	mov	TENSOES_S,0
 
 	lea	si,LINHA_BUF
+
+salva_tensao:
+
+	; Salva e verifica uma tensão
+
+	xor	cx,cx
+	mov	TENSAO,cl
 
 	jmp	tensao1
 
@@ -339,6 +368,9 @@ tensao1:
 	cmp	dl,TAB
 	je	loop_tensao1
 
+	cmp	dl,0
+	je	erro_leitura
+
 	call	salva_dig_tensao
 
 tensao2:
@@ -353,6 +385,9 @@ tensao2:
 
 	cmp	dl,TAB
 	je	tensao3
+
+	cmp	dl,0
+	je	fim_tensao
 
 	call	salva_dig_tensao
 	jc	erro_leitura
@@ -372,6 +407,9 @@ tensao3:
 	cmp	dl,TAB
 	je	tensao3
 
+	cmp	dl,0
+	je	fim_tensao
+
 	jmp	erro_leitura
 
 fim_tensao:
@@ -385,6 +423,12 @@ fim_tensao:
 	cmp	TENSOES,4
 	je	erro_leitura
 
+	cmp	dl,0
+	jne	processa_tensao
+
+	cmp	TENSOES,2
+	je	erro_leitura
+
 processa_tensao:
 
 	lea	bx,TENSAO_BUF_STR
@@ -394,9 +438,28 @@ processa_tensao:
 sem_tensao:
 
 	cmp	al,MIN_TENSAO
+        jae     qualidade_tensao
 
+        inc     TENSOES_S
 
-	jmp	fim_arquivo
+	jmp	sem_qualidade
+
+qualidade_tensao:
+
+        cmp	al,TENSAO-10
+	jl	sem_qualidade
+
+	cmp	al,TENSAO+10
+	ja	sem_qualidade
+
+	inc	TENSOES_Q
+
+sem_qualidade:
+
+	cmp	dl,0
+	je	processa_arquivo
+
+	jmp	salva_tensao
 
 erro_leitura:
 
@@ -415,6 +478,10 @@ erro_leitura:
 	lea	bx,LINHA_BUF
 	call	printf_s
 
+	lea	bx,ENTER
+	call	printf_s
+
+	call	fim
 
 fim_arquivo:
 
@@ -422,6 +489,20 @@ fim_arquivo:
 
 	pop	bx
 	call	fclose
+
+	; Imprime relatório na tela
+
+	lea	bx,TEMPO
+	call	printf_s
+
+	mov	ax,SEGUNDOS
+	call	formata_tempo
+
+	lea	bx,TEMPO_BUF
+	call	printf_s
+
+	lea	bx,ENTER
+	call	printf_s
 
 fim:
 
@@ -561,6 +642,8 @@ salva_dig_tensao	endp
 ; Se não for, define CF como 0
 verifica_tensao	proc	near
 
+	push	dx
+
 	cmp	cx,3
 	jl	vt_ret
 
@@ -568,14 +651,93 @@ verifica_tensao	proc	near
 	cmp	dl,'5'
 	je	vt_ret
 
+	pop	dx
+
 	clc
 	ret
 
 vt_ret:
+	pop	dx
+
 	stc
 	ret
 
 verifica_tensao	endp
+
+; formata_tempo: Inteiro (ax) -> String (bx)
+; Obj.: Dado o número de segundos, devolve o tempo formatado
+formata_tempo	proc near
+
+	mov	dl,60
+
+	xor	cx,cx
+
+	mov	SEG_BUF,al
+
+	cmp	ax,60
+	jl	tempo_seg
+
+	sub	cx,3
+
+calc_min:
+
+	div	dl
+
+	mov	MIN_BUF,al
+	mov	SEG_BUF,ah
+
+	cmp	al,60
+	jl	tempo_min
+
+	sub	cx,3
+
+calc_hora:
+
+	xor	ah,ah
+
+	div	dl
+
+	mov	HORA_BUF,al
+	mov	MIN_BUF,ah
+
+tempo_hora:
+
+	add	cx,6
+
+	lea	bx,TEMPO_BUF+6
+	mov	al,HORA_BUF
+
+	xor	ah,ah
+
+	call	sprintf_w
+
+tempo_min:
+
+	add	cx,3
+
+	lea	bx,TEMPO_BUF+3
+	mov	al,MIN_BUF
+
+	xor	ah,ah
+
+	call	sprintf_w
+
+tempo_seg:
+
+	lea	bx,TEMPO_BUF
+	mov	al,SEG_BUF
+
+	xor	ah,ah
+
+	call	sprintf_w
+
+	mov	si,cx
+
+	mov	[si+bx+1],0
+
+	lea	bx,TEMPO_BUF
+
+formata_tempo	endp
 
 ; atoi: String (bx) -> Inteiro (ax)
 ; Obj.: recebe uma string e transforma em um inteiro

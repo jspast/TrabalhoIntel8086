@@ -15,7 +15,10 @@ TAB		equ	09h	; Tabulação
 MAXCMD          equ	100	; Tamanho máximo da linha de comando
 MAXARQ		equ	100	; Tamanho máximo do nome do arquivo
 
-BUFFER_FILE	equ	100	; Tamanho do buffer para leitura de arquivo
+MAXFILE_BUF	equ	100	; Tamanho do buffer para leitura de arquivo
+MAXLINHA_BUF    equ     100     ; Tamanho do buffer de linha do arquivo
+
+MIN_TENSAO	equ	10	; O mínimo de tensão não considerado sem tensão
 
 ;------------------------------------------
 ; DADOS
@@ -35,8 +38,17 @@ TENSAO		db	0		; Tensão em inteiro
 TENSAO_BUF_STR	db	4 dup(0)	; Buffer para armazenar a tensão lida do arquivo
 TENSAO_BUF	db	0		; Buffer para tensão em inteiro
 
-SEGUNDOS	dw	0		; Contador de segundos (linhas do arquivo)
 SEGUNDOS_STR	db	6 dup(0)	; contador de segundos em ASCII
+
+SEGUNDOS	dw	0		; Contador de segundos (linhas do arquivo)
+SEGUNDOS_Q	dw	0		; Contador de segundos de tensão com qualidade
+SEGUNDOS_S	dw	0		; Contador de segundos sem tensão
+
+TENSOES         db      0               ; Contador de número de tensões em uma linha
+TENSOES_Q	db	0		; Contador de tensões com qualidade em uma linha
+TENSOES_S	db	0		; Contador de tensões sem tensão em uma linha
+
+LINHA_BUF	db	MAXLINHA_BUF dup (?)	; Buffer para armazenar linha do arquivo
 
 ENTER		db	CR,LF,0		; String para pular linha
 
@@ -57,7 +69,7 @@ sw_n	        dw	0			; Usada dentro da funcao sprintf_w
 sw_f    	db	0			; Usada dentro da funcao sprintf_w
 sw_m	        dw	0			; Usada dentro da funcao sprintf_w
 
-FileBuffer	db	BUFFER_FILE dup (?)	; Usada dentro do setChar e getChar
+FileBuffer	db	MAXFILE_BUF dup (?)	; Usada dentro do setChar e getChar
 
 ;------------------------------------------
 ; CÓDIGO
@@ -230,7 +242,9 @@ abre_arquivo:
 	call	fopen
 	jc	erro_abre_arquivo
 
-	xor	ch,ch
+	xor	cx,cx
+
+	lea	di,LINHA_BUF
 
 	jmp	processa_arquivo
 
@@ -241,66 +255,148 @@ erro_abre_arquivo:
 
 	jmp	fim
 
-
-tensao2:
+processa_arquivo:
 
 	call	getChar
 	jc	fim_arquivo
+
+	cmp	dl,CR
+	je	fim_linha
+
+	cmp	dl,LF
+	je	fim_linha
+
+	mov	byte ptr[di],dl
+
+	inc	di
+
+	jmp	processa_arquivo
+
+fim_linha:
+
+	call	getChar
+	jc	fim_arquivo
+
+	cmp	dl,CR
+	je	fim_linha
+
+	cmp	dl,LF
+	je	fim_linha
+
+	mov	byte ptr[di],0
+
+	inc	SEGUNDOS
+
+verifica_fim_arquivo:
+
+	lea	si,LINHA_BUF
+	mov	dl,[si]
+
+letra1:
+	cmp	dl,'f'
+	je	letra2
+	
+	cmp	dl,'F'
+	je	letra2
+
+	jmp	salva_tensoes
+
+letra2:
+	cmp	dl,'i'
+	je	letra3
+	
+	cmp	dl,'I'
+	je	letra3
+
+	jmp	salva_tensoes
+
+letra3:
+	cmp	dl,'m'
+	je	fim_arquivo
+	
+	cmp	dl,'M'
+	je	fim_arquivo
+
+	jmp	salva_tensoes
+
+salva_tensoes:
+
+	xor	cx,cx
+
+	lea	si,LINHA_BUF
+
+	jmp	tensao1
+
+loop_tensao1:
+	inc	si
+
+tensao1:
+	mov	dl,[si]
+
+	cmp	dl,' '
+	je	loop_tensao1
+
+	cmp	dl,TAB
+	je	loop_tensao1
+
+	call	salva_dig_tensao
+
+tensao2:
+	inc	si
+	mov	dl,[si]
+	
+	cmp	dl,','
+	je	fim_tensao
+
+	cmp	dl,' '
+	je	tensao3
+
+	cmp	dl,TAB
+	je	tensao3
+
+	call	salva_dig_tensao
+	jc	erro_leitura
+
+	jmp	tensao2
+
+tensao3:
+	inc	si
+	mov	dl,[si]
 
 	cmp	dl,','
 	je	fim_tensao
 
 	cmp	dl,' '
-	je	fim_tensao
+	je	tensao3
 
 	cmp	dl,TAB
-	je	fim_tensao
+	je	tensao3
 
-	cmp	dl,CR
-	je	fim_linha
-
-	cmp	dl,LF
-	je	fim_linha
-
-	call	salva_dig_tensao
-	jc	fim_tensao
-
-	jmp	tensao2
-
-processa_arquivo:
-tensao1:
-	call	getChar
-	jc	fim_arquivo
-
-	cmp	dl,' '
-	je	tensao1
-
-	cmp	dl,TAB
-	je	tensao1
-
-	cmp	dl,CR
-	je	tensao1
-
-	cmp	dl,LF
-	je	tensao1
-
-	call	salva_dig_tensao
-
-	jmp	tensao2
-
-fim_linha:
-
-	inc	SEGUNDOS
+	jmp	erro_leitura
 
 fim_tensao:
 
-	push	bx
 	lea	bx,TENSAO_BUF_STR
 
 	call	verifica_tensao
 	jc	erro_leitura
 
+	inc	TENSOES
+	cmp	TENSOES,4
+	je	erro_leitura
+
+processa_tensao:
+
+	lea	bx,TENSAO_BUF_STR
 	call	atoi
+	mov	TENSAO_BUF,al
+
+sem_tensao:
+
+	cmp	al,MIN_TENSAO
+
+
+	jmp	fim_arquivo
 
 erro_leitura:
 
@@ -308,7 +404,6 @@ erro_leitura:
 	call	printf_s
 
 	mov	ax,SEGUNDOS
-	inc	ax
 	lea	bx,SEGUNDOS_STR
 	call	sprintf_w
 	lea	bx,SEGUNDOS_STR
@@ -317,7 +412,7 @@ erro_leitura:
 	lea	bx,ERRO_CONTEUDO
 	call	printf_s
 
-	lea	bx,TENSAO_BUF_STR
+	lea	bx,LINHA_BUF
 	call	printf_s
 
 
@@ -379,7 +474,7 @@ p_str_e:
 percorre_str_espaco	endp
 
 ; strlen: String (si) -> Inteiro (cx)
-; Obj.: Dada uma string, retorna o tamanho da string, sem alterar o ponteiro da string
+; Obj.: Dada uma string, retorna o tamanho da string (até espaço ou fim), sem alterar o ponteiro da string
 strlen	proc	near
 
 	; Inicializa o contador
@@ -430,25 +525,25 @@ print_param	proc	near
 
 print_param	endp
 
-; salva_dig_tensao: Char (dl) Inteiro (ch) -> Boolean (CF)
+; salva_dig_tensao: Char (dl) Inteiro (cx) -> Boolean (CF)
 ; Obj.: Dado um dígito e um contador de dígitos, salva esse dígito no buffer da tensão e incrmenta o contador
-; Se chegou em 3 dígitos, define CF como 1
+; Se chegou em 4 dígitos, define CF como 1
 ; Se não chegou, define CF como 0
 salva_dig_tensao	proc	near
 
+	push	di
+
 	mov	al,dl
 
-	xor	cl,cl
-	mov	cl,ch
-
-	lea	di,[TENSAO_BUF_STR+cx]
+	lea	di,TENSAO_BUF_STR
+	add	di,cx
 	stosb
 
-	mov	ch,cl
+	pop	di
 
-	inc	ch
+	inc	cx
 
-	cmp	ch,3
+	cmp	cx,4
 	jne	sdt_ret
 
 	stc
@@ -466,12 +561,12 @@ salva_dig_tensao	endp
 ; Se não for, define CF como 0
 verifica_tensao	proc	near
 
-	cmp	ch,3
-	jne	vt_ret
+	cmp	cx,3
+	jl	vt_ret
 
 	mov	dl,[bx]
 	cmp	dl,'5'
-	ja	vt_ret
+	je	vt_ret
 
 	clc
 	ret

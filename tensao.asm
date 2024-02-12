@@ -63,7 +63,7 @@ ERRO_OPCAO	db	" ] sem parametro",CR,LF,0	; Mensagem de erro para opção inváli
 
 ERRO_TENSAO	db	"Parametro da opcao [-v] deve ser 127 ou 220",CR,LF,0	; Mensagem de erro para tensão inválida
 
-ERRO_ARQUIVO	db	"Erro ao abrir arquivo",CR,LF,0	; Mensagem de erro para arquivo
+ERRO_ARQUIVO	db	"Arquivo de entrada nao existente",CR,LF,0	; Mensagem de erro para arquivo
 
 ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inválida
 ERRO_CONTEUDO	db	" invalido: ",0	; Mensagem de erro para conteúdo inválido
@@ -373,6 +373,7 @@ letra3:
 
 fim_arquivo3:
 
+	dec	SEGUNDOS
 	inc     ULT_LINHA
 
 	jmp	fecha_arquivo
@@ -467,7 +468,7 @@ fim_tensao:
 	jne	processa_tensao
 
 	cmp	TENSOES,2
-	je	erro_leitura
+	jbe	erro_leitura
 
 processa_tensao:
 
@@ -490,7 +491,7 @@ qualidade_tensao:
 	sub	ah,10
 
         cmp	al,ah
-	jl	sem_qualidade
+	jb	sem_qualidade
 
 	add	ah,20
 
@@ -504,17 +505,19 @@ sem_qualidade:
 	cmp	dl,0
 	je	calc_tensoes
 
-	jmp	nao_ultima_tensao
+nao_ultima_tensao:
+        inc     si
+	jmp	salva_tensao
 
 calc_tensoes:
 
 	cmp	TENSOES_S,3
-	jne	s_tensoes
+	jne	c_tensoes
 
 	inc	SEGUNDOS_S
 	jmp	sq_tensoes
 
-s_tensoes:
+c_tensoes:
 
 	cmp	TENSOES_Q,3
 	jne	sq_tensoes
@@ -530,10 +533,6 @@ sq_tensoes:
 
 ultima_linha:
 	jmp	fecha_arquivo
-
-nao_ultima_tensao:
-        inc     si
-	jmp	salva_tensao
 
 erro_leitura:
 
@@ -605,8 +604,8 @@ relatorio_arquivo:
 	lea	si,TEMPO_Q
 	call	fprintf
 
-	;mov	ax,SEGUNDOS_Q
-	;call	formata_tempo
+	mov	ax,SEGUNDOS_Q
+	call	formata_tempo
 
 	lea	si,TEMPO_BUF
 	call	fprintf
@@ -617,8 +616,8 @@ relatorio_arquivo:
 	lea	si,TEMPO_S
 	call	fprintf
 
-	;mov	ax,SEGUNDOS_S
-	;call	formata_tempo
+	mov	ax,SEGUNDOS_S
+	call	formata_tempo
 
 	lea	si,TEMPO_BUF
 	call	fprintf
@@ -767,11 +766,11 @@ verifica_tensao	proc	near
 	push	dx
 
 	cmp	cx,3
-	jl	vt_ret
+	jb	vt_ret
 
 	mov	dl,[bx]
 	cmp	dl,'5'
-	jl	vt_ret
+	jb	vt_ret
 
 	pop	dx
 
@@ -786,9 +785,11 @@ vt_ret:
 
 verifica_tensao	endp
 
-; formata_tempo: Inteiro (ax) -> String (bx)
+; formata_tempo: Inteiro (ax) -> String (TEMPO_BUF)
 ; Obj.: Dado o número de segundos, devolve o tempo formatado
 formata_tempo	proc near
+
+	push	bx
 
 	mov	dl,60
 
@@ -797,7 +798,7 @@ formata_tempo	proc near
 	mov	SEG_BUF,al
 
 	cmp	ax,60
-	jl	tempo_seg
+	jb	tempo_seg
 
 	sub	cx,3
 
@@ -809,7 +810,7 @@ calc_min:
 	mov	SEG_BUF,ah
 
 	cmp	al,60
-	jl	tempo_min
+	jb	tempo_min
 
 	sub	cx,3
 
@@ -857,7 +858,9 @@ tempo_seg:
 
 	mov	[si+bx+1],0
 
-	lea	bx,TEMPO_BUF
+	pop	bx
+
+	ret
 
 formata_tempo	endp
 

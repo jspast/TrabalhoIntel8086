@@ -53,6 +53,7 @@ TENSOES_Q	db	0		; Contador de tensões com qualidade em uma linha
 TENSOES_S	db	0		; Contador de tensões sem tensão em uma linha
 
 LINHA_BUF	db	MAXLINHA_BUF dup (?)	; Buffer para armazenar linha do arquivo
+DIG_1_BUF	db	0
 
 ENTER		db	CR,LF,0		; String para pular linha
 
@@ -66,6 +67,8 @@ ERRO_ARQUIVO	db	"Erro ao abrir arquivo",CR,LF,0	; Mensagem de erro para arquivo
 
 ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inválida
 ERRO_CONTEUDO	db	" invalido: ",0	; Mensagem de erro para conteúdo inválido
+
+ERRO		db	0
 
 TEMPO		db	"Tempo total de medicoes: ",0
 TEMPO_Q		db	"Tempo tensao de qualidade: ",0
@@ -269,6 +272,16 @@ erro_abre_arquivo:
 
 	jmp	fim
 
+processa_nova_linha:
+
+	pop     bx
+        push    bx
+        lea	di,LINHA_BUF
+
+	mov	al,DIG_1_BUF
+
+	stosb
+
 processa_arquivo:
 
 	; Copia linha do arquivo para LINHA_BUF
@@ -298,6 +311,8 @@ fim_linha:
 
 	cmp	dl,LF
 	je	fim_linha
+
+	mov	DIG_1_BUF,dl
 
 	mov	byte ptr[di],0
 
@@ -457,11 +472,14 @@ qualidade_tensao:
 sem_qualidade:
 
 	cmp	dl,0
-	je	processa_arquivo
+	je	processa_nova_linha
 
+        inc     si
 	jmp	salva_tensao
 
 erro_leitura:
+
+	inc	ERRO
 
 	lea	bx,ERRO_LINHA
 	call	printf_s
@@ -481,7 +499,7 @@ erro_leitura:
 	lea	bx,ENTER
 	call	printf_s
 
-	call	fim
+	jmp	processa_nova_linha
 
 fim_arquivo:
 
@@ -491,6 +509,9 @@ fim_arquivo:
 	call	fclose
 
 	; Imprime relatório na tela
+
+	cmp	ERRO,0
+	jne	fim
 
 	lea	bx,TEMPO
 	call	printf_s
@@ -743,6 +764,8 @@ formata_tempo	endp
 ; Obj.: recebe uma string e transforma em um inteiro
 atoi	proc near
 
+        push    dx
+
 	mov	ax,0		; A = 0;
 		
 atoi_2:
@@ -763,6 +786,8 @@ atoi_2:
 	jmp	atoi_2		;}
 
 atoi_1:
+        pop     dx
+
 	ret			; return A;
 
 atoi	endp
@@ -921,8 +946,16 @@ getChar	proc	near
 	int	21h
 	mov	dl,FileBuffer
 
+	cmp	ax,0
+	je	erro_getchar
+
 	pop	cx
 
+	ret
+
+erro_getchar:
+	pop	cx
+	stc
 	ret
 
 getChar	endp

@@ -800,8 +800,6 @@ formata_tempo	proc near
 	cmp	ax,60
 	jb	tempo_seg
 
-	sub	cx,3
-
 calc_min:
 
 	div	dl
@@ -811,8 +809,6 @@ calc_min:
 
 	cmp	al,60
 	jb	tempo_min
-
-	sub	cx,3
 
 calc_hora:
 
@@ -825,30 +821,55 @@ calc_hora:
 
 tempo_hora:
 
-	add	cx,6
-
-	lea	bx,TEMPO_BUF+6
 	mov	al,HORA_BUF
+	cmp	al,10
+	jae	hora_2_dig
+
+	inc	cx
+
+hora_2_dig:
+	lea	bx,TEMPO_BUF
+	add	bx,cx
 
 	xor	ah,ah
 
 	call	sprintf_w
+
+	mov	byte ptr [bx],":"
+
+	add	cx,2
 
 tempo_min:
 
-	add	cx,3
-
-	lea	bx,TEMPO_BUF+3
 	mov	al,MIN_BUF
+	cmp	al,10
+	jae	min_2_dig
+
+	inc	cx
+
+min_2_dig:
+	lea	bx,TEMPO_BUF
+	add	bx,cx
 
 	xor	ah,ah
 
 	call	sprintf_w
 
+	mov	byte ptr [bx],":"
+
+	add	cx,2
+
 tempo_seg:
 
-	lea	bx,TEMPO_BUF
 	mov	al,SEG_BUF
+	cmp	al,10
+	jae	seg_2_dig
+
+	inc	cx
+
+seg_2_dig:
+	lea	bx,TEMPO_BUF
+	add	bx,cx
 
 	xor	ah,ah
 
@@ -927,6 +948,8 @@ printf_s	endp
 ; -> string recebe "3141",0
 sprintf_w	proc	near
 
+	push	cx
+
 	mov	sw_n,ax		; void sprintf_w(char *string, WORD n) {
 
 	mov	cx,5		; k=5;
@@ -980,6 +1003,7 @@ sw_continua2:
 
 	mov	byte ptr[bx],0	;	*string = '\0';
 				; }
+	pop	cx
 	ret			; return;
 		
 sprintf_w	endp

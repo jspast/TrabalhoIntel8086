@@ -69,6 +69,7 @@ ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inválida
 ERRO_CONTEUDO	db	" invalido: ",0	; Mensagem de erro para conteúdo inválido
 
 ERRO		db	0
+ULT_LINHA       db      0
 
 TEMPO		db	"Tempo total de medicoes: ",0
 TEMPO_Q		db	"Tempo tensao de qualidade: ",0
@@ -287,7 +288,13 @@ processa_arquivo:
 	; Copia linha do arquivo para LINHA_BUF
 
 	call	getChar
-	jc	fim_arquivo
+	jnc	nfim_arquivo1
+
+        inc     ULT_LINHA
+
+	jmp	fim_linha
+
+nfim_arquivo1:
 
 	cmp	dl,CR
 	je	fim_linha
@@ -304,7 +311,12 @@ processa_arquivo:
 fim_linha:
 
 	call	getChar
-	jc	fim_arquivo
+	jnc	nfim_arquivo2
+
+        inc     ULT_LINHA
+	jmp	fim_arquivo
+
+nfim_arquivo2:
 
 	cmp	dl,CR
 	je	fim_linha
@@ -314,6 +326,7 @@ fim_linha:
 
 	mov	DIG_1_BUF,dl
 
+fim_arquivo:
 	mov	byte ptr[di],0
 
 	inc	SEGUNDOS
@@ -335,6 +348,9 @@ letra1:
 	jmp	salva_tensoes
 
 letra2:
+	inc	si
+	mov	dl,[si]
+
 	cmp	dl,'i'
 	je	letra3
 	
@@ -344,13 +360,22 @@ letra2:
 	jmp	salva_tensoes
 
 letra3:
+	inc	si
+	mov	dl,[si]
+
 	cmp	dl,'m'
-	je	fim_arquivo
+	je	fim_arquivo3
 	
 	cmp	dl,'M'
-	je	fim_arquivo
+	je	fim_arquivo3
 
 	jmp	salva_tensoes
+
+fim_arquivo3:
+
+	inc     ULT_LINHA
+
+	jmp	fecha_arquivo
 
 salva_tensoes:
 
@@ -471,11 +496,25 @@ qualidade_tensao:
 
 sem_qualidade:
 
+        cmp     ULT_LINHA,0
+        jne     ultima
+
 	cmp	dl,0
 	je	processa_nova_linha
 
+	jmp	nao_ultima
+
+ultima:
+        cmp	dl,0
+	jne	nao_ultima
+
+	jmp	fecha_arquivo
+
+nao_ultima:
+
         inc     si
 	jmp	salva_tensao
+
 
 erro_leitura:
 
@@ -499,9 +538,12 @@ erro_leitura:
 	lea	bx,ENTER
 	call	printf_s
 
+	cmp	ULT_LINHA,0
+	jne	fecha_arquivo
+
 	jmp	processa_nova_linha
 
-fim_arquivo:
+fecha_arquivo:
 
 	; Fecha o arquivo
 
@@ -946,15 +988,16 @@ getChar	proc	near
 	int	21h
 	mov	dl,FileBuffer
 
+	pop	cx
+
 	cmp	ax,0
 	je	erro_getchar
 
-	pop	cx
-
+        clc
 	ret
 
 erro_getchar:
-	pop	cx
+
 	stc
 	ret
 

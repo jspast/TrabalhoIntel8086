@@ -392,7 +392,7 @@ salva_tensao:
 	; Salva e verifica uma tensão
 
 	xor	cx,cx
-	mov	TENSAO,cl
+	mov	TENSAO_BUF,cl
 
 	jmp	tensao1
 
@@ -486,35 +486,54 @@ sem_tensao:
 
 qualidade_tensao:
 
-        cmp	al,TENSAO-10
+	mov	ah,TENSAO
+	sub	ah,10
+
+        cmp	al,ah
 	jl	sem_qualidade
 
-	cmp	al,TENSAO+10
+	add	ah,20
+
+	cmp	al,ah
 	ja	sem_qualidade
 
 	inc	TENSOES_Q
 
 sem_qualidade:
 
-        cmp     ULT_LINHA,0
-        jne     ultima
-
 	cmp	dl,0
-	je	processa_nova_linha
+	je	calc_tensoes
 
-	jmp	nao_ultima
+	jmp	nao_ultima_tensao
 
-ultima:
-        cmp	dl,0
-	jne	nao_ultima
+calc_tensoes:
 
+	cmp	TENSOES_S,3
+	jne	s_tensoes
+
+	inc	SEGUNDOS_S
+	jmp	sq_tensoes
+
+s_tensoes:
+
+	cmp	TENSOES_Q,3
+	jne	sq_tensoes
+
+	inc	SEGUNDOS_Q
+
+sq_tensoes:
+
+        cmp     ULT_LINHA,0
+        jne     ultima_linha
+
+	jmp	processa_nova_linha
+
+ultima_linha:
 	jmp	fecha_arquivo
 
-nao_ultima:
-
+nao_ultima_tensao:
         inc     si
 	jmp	salva_tensao
-
 
 erro_leitura:
 
@@ -555,6 +574,8 @@ fecha_arquivo:
 	cmp	ERRO,0
 	jne	fim
 
+relatorio_tela:
+
 	lea	bx,TEMPO
 	call	printf_s
 
@@ -566,6 +587,44 @@ fecha_arquivo:
 
 	lea	bx,ENTER
 	call	printf_s
+
+relatorio_arquivo:
+
+        lea     dx,FILE_OUT
+        call    fcreate
+
+        lea	si,TEMPO
+	call	fprintf
+
+	lea	si,TEMPO_BUF
+	call	fprintf
+
+	lea	si,ENTER
+	call	fprintf
+
+	lea	si,TEMPO_Q
+	call	fprintf
+
+	;mov	ax,SEGUNDOS_Q
+	;call	formata_tempo
+
+	lea	si,TEMPO_BUF
+	call	fprintf
+
+	lea	si,ENTER
+	call	fprintf
+
+	lea	si,TEMPO_S
+	call	fprintf
+
+	;mov	ax,SEGUNDOS_S
+	;call	formata_tempo
+
+	lea	si,TEMPO_BUF
+	call	fprintf
+
+	lea	si,ENTER
+	call	fprintf
 
 fim:
 
@@ -701,8 +760,8 @@ salva_dig_tensao	endp
 
 ; verifica_tensao: String (bx) Inteiro (ch) -> Boolean (CF)
 ; Obj.: Dada uma string e seu tamanho, verifica se a string é menor ou igual a "499"
-; Se for, define CF como 1
-; Se não for, define CF como 0
+; Se for, define CF como 0
+; Se não for, define CF como 1
 verifica_tensao	proc	near
 
 	push	dx
@@ -712,17 +771,17 @@ verifica_tensao	proc	near
 
 	mov	dl,[bx]
 	cmp	dl,'5'
-	je	vt_ret
+	jl	vt_ret
 
 	pop	dx
 
-	clc
+	stc
 	ret
 
 vt_ret:
 	pop	dx
 
-	stc
+	clc
 	ret
 
 verifica_tensao	endp
@@ -1019,5 +1078,26 @@ setChar	proc	near
 	ret
 
 setChar	endp
+
+; fprintf: File* (bx) String (si) -> void
+; Obj.: Dado um arquivo e uma string, escreve a string no arquivo
+fprintf proc    near
+
+        mov     dl,[si]
+
+        cmp     dl,0
+        je      fim_fprintf
+
+        inc     si
+
+        call    setChar
+
+        jmp     fprintf
+
+fim_fprintf:
+
+        ret
+
+fprintf endp
 
 end

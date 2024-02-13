@@ -75,7 +75,8 @@ TEMPO		db	"Tempo total de medicoes: ",0
 TEMPO_Q		db	"Tempo tensao de qualidade: ",0
 TEMPO_S		db	"Tempo sem tensao: ",0
 
-TEMPO_BUF	db	"  :  :  ",0
+TEMPO_BUF	db	"        ",0
+TEMPO_FORMAT	db	"00:00:00",0
 
 ; Variáveis necessarias para funções.
 
@@ -579,9 +580,8 @@ relatorio_tela:
 	call	printf_s
 
 	mov	ax,SEGUNDOS
-	call	formata_tempo
-
 	lea	bx,TEMPO_BUF
+	call	formata_tempo
 	call	printf_s
 
 	lea	bx,ENTER
@@ -595,7 +595,12 @@ relatorio_arquivo:
         lea	si,TEMPO
 	call	fprintf
 
-	lea	si,TEMPO_BUF
+	push	bx
+	lea	bx,TEMPO_BUF
+	mov	ax,SEGUNDOS
+	call	formata_tempo
+	mov	si,bx
+	pop	bx
 	call	fprintf
 
 	lea	si,ENTER
@@ -604,10 +609,12 @@ relatorio_arquivo:
 	lea	si,TEMPO_Q
 	call	fprintf
 
+	push	bx
+	lea	bx,TEMPO_BUF
 	mov	ax,SEGUNDOS_Q
 	call	formata_tempo
-
-	lea	si,TEMPO_BUF
+	mov	si,bx
+	pop	bx
 	call	fprintf
 
 	lea	si,ENTER
@@ -616,10 +623,12 @@ relatorio_arquivo:
 	lea	si,TEMPO_S
 	call	fprintf
 
+	push	bx
+	lea	bx,TEMPO_BUF
 	mov	ax,SEGUNDOS_S
 	call	formata_tempo
-
-	lea	si,TEMPO_BUF
+	mov	si,bx
+	pop	bx
 	call	fprintf
 
 	lea	si,ENTER
@@ -785,41 +794,47 @@ vt_ret:
 
 verifica_tensao	endp
 
-; formata_tempo: Inteiro (ax) -> String (TEMPO_BUF)
-; Obj.: Dado o número de segundos, devolve o tempo formatado
+; formata_tempo: Inteiro (ax) String (bx) -> String (bx)
+; Obj.: Dado o número de segundos e uma string, devolve o tempo formatado na string 
 formata_tempo	proc near
 
-	push	bx
+	lea	si,TEMPO_FORMAT
+	mov	di,bx
+	mov	cx,9
+	rep	movsb
+	mov	di,bx
 
-	mov	dl,60
+	xor	dl,dl
 
-	xor	cx,cx
+	mov	dh,60
 
 	mov	SEG_BUF,al
 
 	cmp	ax,60
-	jb	tempo_seg
+	jb	comec_seg
 
 calc_min:
 
-	div	dl
+	div	dh
 
 	mov	MIN_BUF,al
 	mov	SEG_BUF,ah
 
 	cmp	al,60
-	jb	tempo_min
+	jb	comec_min
 
 calc_hora:
 
 	xor	ah,ah
 
-	div	dl
+	div	dh
 
 	mov	HORA_BUF,al
 	mov	MIN_BUF,ah
 
 tempo_hora:
+
+	xor	dx,dx
 
 	mov	al,HORA_BUF
 	cmp	al,10
@@ -828,7 +843,8 @@ tempo_hora:
 	inc	cx
 
 hora_2_dig:
-	lea	bx,TEMPO_BUF
+
+	mov	bx,di
 	add	bx,cx
 
 	xor	ah,ah
@@ -837,49 +853,68 @@ hora_2_dig:
 
 	mov	byte ptr [bx],":"
 
-	add	cx,2
+	jmp     tempo_min
+
+comec_min:
+	mov	cx,3
 
 tempo_min:
+	xor	dx,dx
 
 	mov	al,MIN_BUF
 	cmp	al,10
 	jae	min_2_dig
 
+        cmp     cx,3
+        jne     n_comec_min
 	inc	cx
 
+n_comec_min:
+	mov	dx,1
+
 min_2_dig:
-	lea	bx,TEMPO_BUF
-	add	bx,cx
+	mov	bx,di
+	add	bx,dx
+	add	bx,3
 
 	xor	ah,ah
+	xor	dx,dx
 
 	call	sprintf_w
 
 	mov	byte ptr [bx],":"
 
-	add	cx,2
+        jmp     tempo_seg
+
+comec_seg:
+	mov	cx,6
 
 tempo_seg:
+	xor	dx,dx
 
 	mov	al,SEG_BUF
 	cmp	al,10
 	jae	seg_2_dig
 
+        cmp     cx,6
+        jne     n_comec_seg
 	inc	cx
 
+n_comec_seg:
+	mov	dx,1
+
 seg_2_dig:
-	lea	bx,TEMPO_BUF
-	add	bx,cx
+	mov	bx,di
+	add	bx,dx
+	add	bx,6
 
 	xor	ah,ah
+	xor	dx,dx
 
 	call	sprintf_w
 
-	mov	si,cx
-
-	mov	[si+bx+1],0
-
-	pop	bx
+	add	di,cx
+	mov	bx,di
 
 	ret
 
@@ -948,6 +983,7 @@ printf_s	endp
 ; -> string recebe "3141",0
 sprintf_w	proc	near
 
+	push	dx
 	push	cx
 
 	mov	sw_n,ax		; void sprintf_w(char *string, WORD n) {
@@ -1004,6 +1040,7 @@ sw_continua2:
 	mov	byte ptr[bx],0	;	*string = '\0';
 				; }
 	pop	cx
+	pop	dx
 	ret			; return;
 		
 sprintf_w	endp

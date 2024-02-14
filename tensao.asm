@@ -12,11 +12,11 @@ CR              equ	0Dh  	; Carriage Return (Enter)
 LF              equ	0Ah  	; Line Feed ('\n')
 TAB		equ	09h	; Tabulação
 
-MAXCMD          equ	100	; Tamanho máximo da linha de comando
-MAXARQ		equ	100	; Tamanho máximo do nome do arquivo
+MAXCMD          equ	127	; Tamanho máximo da linha de comando
+MAXARQ		equ	127	; Tamanho máximo do nome do arquivo
 
-MAXFILE_BUF	equ	100	; Tamanho do buffer para leitura de arquivo
-MAXLINHA_BUF    equ     100     ; Tamanho do buffer de linha do arquivo
+MAXFILE_BUF	equ	1	; Tamanho do buffer para leitura e escrita de arquivo
+MAXLINHA_BUF    equ     1000	; Tamanho do buffer de linha do arquivo
 
 MIN_TENSAO	equ	10	; O mínimo de tensão não considerado sem tensão
 
@@ -57,9 +57,8 @@ DIG_1_BUF	db	0
 
 ENTER		db	CR,LF,0		; String para pular linha
 
-OPCAO		db	"Opcao [-",0
-OPCAO2		db	" ] ",0
-ERRO_OPCAO	db	" ] sem parametro",CR,LF,0	; Mensagem de erro para opção inválida
+OPCAO		db	"Opcao [- ] ",0		; Mensagem de parâmetro de opção
+ERRO_S_PARAM	db	"sem parametro",0
 
 ERRO_TENSAO	db	"Parametro da opcao [-v] deve ser 127 ou 220",CR,LF,0	; Mensagem de erro para tensão inválida
 
@@ -77,8 +76,6 @@ TEMPO_S		db	"Tempo sem tensao: ",0
 
 TEMPO_BUF	db	"        ",0
 TEMPO_FORMAT	db	"00:00:00",0
-
-; Variáveis necessarias para funções.
 
 sw_n	        dw	0			; Usada dentro da funcao sprintf_w
 sw_f    	db	0			; Usada dentro da funcao sprintf_w
@@ -99,8 +96,7 @@ FileBuffer	db	MAXFILE_BUF dup (?)	; Usada dentro do setChar e getChar
 
 	; Salva linha de comando em CMDLINE
 
-	push	ds      ; Salva as informações de segmentos
-	push    es
+	push	ds      ; Salva o segmento de dados
 
 	mov     ax,ds   ; Troca DS com ES para poder usa o REP MOVSB
 	mov     bx,es
@@ -117,51 +113,51 @@ FileBuffer	db	MAXFILE_BUF dup (?)	; Usada dentro do setChar e getChar
 
 	rep	movsb
 
-	pop 	es	; retorna as informações dos registradores de segmentos
-	pop	ds
-	mov     ax,ds
+	pop	ds	; retorna as informações dos registradores de segmentos
+
+	mov     ax,ds	; Faz ES apontar para o segmento de dados
 	mov     es,ax
 
 	lea     si,CMDLINE
 
-percorre_linha:
+percorre_cmd:
+
+	; Procura por um '-' depois de um espaço
 	
 	call	percorre_str_espaco
 	jc	fim_cmd
 
-	mov	al,[si]
-	inc	si
-
 	cmp	al,0
 	je	fim_cmd
 
+	inc	si
+
 	cmp	al,'-'
-	je	verifica_opcao1
+	je	v_op_i
 
-	jmp	percorre_linha
-
-verifica_opcao1:
+	jmp	percorre_cmd
 
 	; Verifica qual a opção depois do '-'
 
+v_op_i:
 	mov	dl,[si]
 	cmp	dl,'i'
-	jne	verifica_opcao3
+	jne	v_op_o
 	lea	di,FILE_IN
 	jmp	salva_opcao
 
-verifica_opcao3:
+v_op_o:
 	cmp	dl,'o'
-	jne	verifica_opcao4
+	jne	v_op_v
 	lea	di,FILE_OUT
 	jmp	salva_opcao
 
-verifica_opcao4:
+v_op_v:
 	cmp	dl,'v'
-	je 	verifica_opcao5
-	jmp	percorre_linha
+	je 	op_v
+	jmp	percorre_cmd
 	
-verifica_opcao5:
+op_v:
 	lea	di,TENSAO_STR
 	
 salva_opcao:
@@ -171,8 +167,6 @@ salva_opcao:
 	call	percorre_str_espaco
 	jc	erro_sem_parametro
 	
-	mov	al,[si]
-
 	cmp	al,0
 	je	erro_sem_parametro
 
@@ -187,7 +181,7 @@ salva_opcao:
 
 	mov	byte ptr[di],0	; Coloca 0 no final da string
 
-	jmp	percorre_linha
+	jmp	percorre_cmd
 
 fim_cmd:
 
@@ -201,25 +195,25 @@ fim_cmd:
 	; Verifica valor da tensão
 
 	cmp	ax,127
-	je	tensao_ok
+	je	imprime_parametros
 
 	cmp	ax,220
 	jne	erro_v
 
-tensao_ok:
+imprime_parametros:
 
-	; Imprime os parâmetros considerados
+	; Imprime os parâmetros do relatório na tela
 
 	mov	al,'i'
-	lea	cx,FILE_IN
+	lea	si,FILE_IN
 	call	print_param
 
 	mov	al,'o'
-	lea	cx,FILE_OUT
+	lea	si,FILE_OUT
 	call	print_param
 
 	mov	al,'v'
-	lea	cx,TENSAO_STR
+	lea	si,TENSAO_STR
 	call	print_param
 
 	jmp	abre_arquivo
@@ -228,15 +222,10 @@ erro_sem_parametro:
 
 	; Erro: opção sem parâmetro
 
-	lea	di,ERRO_OPCAO
-
 	mov	al,dl
-	stosb
 
-	lea	bx,OPCAO
-	call    printf_s
-	lea	bx,ERRO_OPCAO
-	call    printf_s
+	lea	si,ERRO_S_PARAM
+	call	print_param
 
 	jmp	fim
 
@@ -257,7 +246,7 @@ abre_arquivo:
 	call	fopen
 	jc	erro_abre_arquivo
 
-	push	bx
+	push	bx	; Guarda handle do arquivo
 
 	xor	cx,cx
 
@@ -276,11 +265,14 @@ erro_abre_arquivo:
 
 processa_nova_linha:
 
-	pop     bx
+	; Inicia processamento de nova linha
+
+	pop     bx	; Recupera e guarda handle do arquivo
         push    bx
+
         lea	di,LINHA_BUF
 
-	mov	al,DIG_1_BUF
+	mov	al,DIG_1_BUF	; Salva primeiro caractere da linha lido ao acabar a linha anterior
 
 	stosb
 
@@ -289,45 +281,48 @@ processa_arquivo:
 	; Copia linha do arquivo para LINHA_BUF
 
 	call	getChar
-	jnc	nfim_arquivo1
+	jnc	nfim_arquivo1	; Testa se é o fim do arquivo
 
-        inc     ULT_LINHA
+        inc     ULT_LINHA	; Se for, incrementa a variável de última linha
 
-	jmp	fim_linha
+	jmp	fim_linha1
 
 nfim_arquivo1:
 
 	cmp	dl,CR
-	je	fim_linha
+	je	fim_linha1
 
 	cmp	dl,LF
-	je	fim_linha
+	je	fim_linha1
 
-	mov	byte ptr[di],dl
+	mov	byte ptr[di],dl		; Salva caractere se não for CR ou LF
 
 	inc	di
 
 	jmp	processa_arquivo
 
-fim_linha:
+fim_linha1:
+
+	; Testa próximos caracteres até realmente acabar a linha atual
 
 	call	getChar
-	jnc	nfim_arquivo2
+	jnc	nfim_arquivo2	; Testa se é o fim do arquivo
 
-        inc     ULT_LINHA
-	jmp	fim_arquivo
+        inc     ULT_LINHA	; Se for, incrementa a variável de última linha
+	
+	jmp	fim_linha2
 
 nfim_arquivo2:
 
 	cmp	dl,CR
-	je	fim_linha
+	je	fim_linha1
 
 	cmp	dl,LF
-	je	fim_linha
+	je	fim_linha1
 
-	mov	DIG_1_BUF,dl
+	mov	DIG_1_BUF,dl	; Salva primeiro caractere da próxima linha
 
-fim_arquivo:
+fim_linha2:
 	mov	byte ptr[di],0
 
 	inc	SEGUNDOS
@@ -360,6 +355,15 @@ letra2:
 
 	jmp	salva_tensoes
 
+fim_arquivo3:
+
+	; Trata caso de linha "fim"
+
+	dec	SEGUNDOS
+	inc     ULT_LINHA
+
+	jmp	fecha_arquivo
+
 letra3:
 	inc	si
 	mov	dl,[si]
@@ -370,20 +374,11 @@ letra3:
 	cmp	dl,'M'
 	je	fim_arquivo3
 
-	jmp	salva_tensoes
-
-fim_arquivo3:
-
-	dec	SEGUNDOS
-	inc     ULT_LINHA
-
-	jmp	fecha_arquivo
-
 salva_tensoes:
 
-	; Salva e verifica as tensões da linha
+	; Salva e verifica as 3 tensões da linha
 
-	mov	TENSOES,0
+	mov	TENSOES,0	; Zera os contadores de tensões
 	mov	TENSOES_Q,0
 	mov	TENSOES_S,0
 
@@ -393,8 +388,8 @@ salva_tensao:
 
 	; Salva e verifica uma tensão
 
-	xor	cx,cx
-	mov	TENSAO_BUF,cl
+	xor	cx,cx		; Zera o contador de dígitos de uma tensão
+	lea	di,TENSAO_BUF_STR	; Carrega posição inicial do buffer da tensão
 
 	jmp	tensao1
 
@@ -402,76 +397,91 @@ loop_tensao1:
 	inc	si
 
 tensao1:
-	mov	dl,[si]
 
-	cmp	dl,' '
+	; Salva primeiro dígito da tensão
+
+	mov	al,[si]
+
+	cmp	al,' '
 	je	loop_tensao1
 
-	cmp	dl,TAB
+	cmp	al,TAB
 	je	loop_tensao1
 
-	cmp	dl,0
+	cmp	al,0
 	je	erro_leitura
 
 	call	salva_dig_tensao
 
 tensao2:
+
+	; Salva segundo e terceiro dígitos da tensão
+
 	inc	si
-	mov	dl,[si]
+	mov	al,[si]
 	
-	cmp	dl,','
+	cmp	al,','
 	je	fim_tensao
 
-	cmp	dl,' '
+	cmp	al,' '
 	je	tensao3
 
-	cmp	dl,TAB
+	cmp	al,TAB
 	je	tensao3
 
-	cmp	dl,0
+	cmp	al,0
 	je	fim_tensao
 
 	call	salva_dig_tensao
-	jc	erro_leitura
+	jc	erro_leitura		; Se chegou em 4 dígitos, erro
 
 	jmp	tensao2
 
 tensao3:
-	inc	si
-	mov	dl,[si]
 
-	cmp	dl,','
+	; Verifica caso de espaço entre dígitos da tensão
+
+	inc	si
+	mov	al,[si]
+
+	cmp	al,','
 	je	fim_tensao
 
-	cmp	dl,' '
+	cmp	al,' '
 	je	tensao3
 
-	cmp	dl,TAB
+	cmp	al,TAB
 	je	tensao3
 
-	cmp	dl,0
+	cmp	al,0
 	je	fim_tensao
 
 	jmp	erro_leitura
 
 fim_tensao:
 
+	; Verifica tensões
+
 	lea	bx,TENSAO_BUF_STR
 
-	call	verifica_tensao
+	call	verifica_tensao		; Verifica se a última salva é menor que "500"
 	jc	erro_leitura
 
-	inc	TENSOES
+	inc	TENSOES			; Verifica se essa é a quarta a ser salva (erro)
 	cmp	TENSOES,4
 	je	erro_leitura
+
+	mov	dl,al	; Salva último dígito em dl
 
 	cmp	dl,0
 	jne	processa_tensao
 
-	cmp	TENSOES,2
+	cmp	TENSOES,2		; Se é a última tensão da linha, verifica se tem menos de 3 (erro)
 	jbe	erro_leitura
 
 processa_tensao:
+
+	; Salva tensão como inteiro
 
 	lea	bx,TENSAO_BUF_STR
 	call	atoi
@@ -479,63 +489,74 @@ processa_tensao:
 
 sem_tensao:
 
+	; Verifica se é sem tensão
+
 	cmp	al,MIN_TENSAO
         jae     qualidade_tensao
 
         inc     TENSOES_S
 
-	jmp	sem_qualidade
+	jmp	fim_processa_tensao	; Se for, já se sabe que não tem qualidade
 
 qualidade_tensao:
 
-	mov	ah,TENSAO
+	; Verifica se tem qualidade
+
+	mov	ah,TENSAO	; Teste -10
 	sub	ah,10
 
         cmp	al,ah
-	jb	sem_qualidade
+	jb	fim_processa_tensao
 
-	add	ah,20
+	add	ah,20		; Teste +10
 
 	cmp	al,ah
-	ja	sem_qualidade
+	ja	fim_processa_tensao
 
 	inc	TENSOES_Q
 
-sem_qualidade:
+fim_processa_tensao:
+
+	; Verifica se é a última tensão da linha
 
 	cmp	dl,0
 	je	calc_tensoes
 
-nao_ultima_tensao:
         inc     si
-	jmp	salva_tensao
+	jmp	salva_tensao	; Se não for, calcula a próxima
 
 calc_tensoes:
 
-	cmp	TENSOES_S,3
+	; Processa a linha como um todo
+
+	cmp	TENSOES_S,3	; Verifica se é sem tensão
 	jne	c_tensoes
 
 	inc	SEGUNDOS_S
-	jmp	sq_tensoes
+	jmp	fim_calc_tensoes	; Se for, já se sabe que não tem qualidade
 
 c_tensoes:
 
-	cmp	TENSOES_Q,3
-	jne	sq_tensoes
+	cmp	TENSOES_Q,3	; Verifica se tem qualidade
+	jne	fim_calc_tensoes
 
 	inc	SEGUNDOS_Q
 
-sq_tensoes:
+fim_calc_tensoes:
+
+	; Verifica se é a última linha do arquivo
 
         cmp     ULT_LINHA,0
         jne     ultima_linha
 
-	jmp	processa_nova_linha
+	jmp	processa_nova_linha	; Se não for, processa próxima linha
 
 ultima_linha:
-	jmp	fecha_arquivo
+	jmp	fecha_arquivo		; Se for, fecha o arquivo
 
 erro_leitura:
+
+	; Imprime erro de linha inválida do arquivo
 
 	inc	ERRO
 
@@ -557,10 +578,10 @@ erro_leitura:
 	lea	bx,ENTER
 	call	printf_s
 
-	cmp	ULT_LINHA,0
+	cmp	ULT_LINHA,0	; Se for a última linha, fecha o arquivo
 	jne	fecha_arquivo
 
-	jmp	processa_nova_linha
+	jmp	processa_nova_linha	; Se não, vê se tem outras linhas inválidas
 
 fecha_arquivo:
 
@@ -569,12 +590,12 @@ fecha_arquivo:
 	pop	bx
 	call	fclose
 
-	; Imprime relatório na tela
-
-	cmp	ERRO,0
+	cmp	ERRO,0		; Se houve erro no arquivo, encerra
 	jne	fim
 
 relatorio_tela:
+
+	; Imprime medições do relatório na tela
 
 	lea	bx,TEMPO
 	call	printf_s
@@ -589,8 +610,22 @@ relatorio_tela:
 
 relatorio_arquivo:
 
-        lea     dx,FILE_OUT
+	; Imprime os parâmetros do relatório no arquivo
+
+	lea     dx,FILE_OUT
         call    fcreate
+
+	mov	al,'i'
+	lea	dx,FILE_IN
+	call	fprint_param
+
+	mov	al,'o'
+	lea	dx,FILE_OUT
+	call	fprint_param
+
+	mov	al,'v'
+	lea	dx,TENSAO_STR
+	call	fprint_param
 
         lea	si,TEMPO
 	call	fprintf
@@ -642,35 +677,36 @@ fim:
 ; FUNÇÕES
 ;------------------------------------------
 
-; percorre_str_espaco: String (si) -> String (si) Boolean (CF)
+; percorre_str_espaco: String (si) -> String (si) Inteiro (ah) Inteiro (al) Boolean (CF)
 ; Obj.: Dada uma string, percorre a string até encontrar o primeiro caractere depois de um espaço
 ; Se encontrar, retorna o ponteiro para esse caractere e define CF como 0
 ; Se não encontrar, retorna o ponteiro para o final da string e define CF como 1
+; Devolve em AH o número de espaços percorridos
+; Devolve em AL o caractere encontrado
 percorre_str_espaco	proc	near
 
-	; Procura por um espaço
+	xor	ah,ah
 
-	mov	al,[si]
-	inc	si
+	jmp	p_str_1
 
-	cmp	al,' '
-	je	p_str_1
+	; Procura por um espaço e depois por um caractere diferente de espaço
 
-	cmp	al,0
-	je	p_str_e
+p_str_2:
+	inc	ah
 
 p_str_1:
 
-	; Procura por um caractere diferente de espaço
-
 	mov	al,[si]
 	inc	si
 
 	cmp	al,' '
-	je	p_str_1
+	je	p_str_2
 
 	cmp	al,0
 	je	p_str_e
+
+	cmp	ah,0
+	je	p_str_1
 
 	dec	si	; Ajusta o ponteiro para o primeiro caractere depois do espaço
 
@@ -717,18 +753,30 @@ fim_strlen:
 
 strlen	endp
 
-; print_param: Char (al) String (cx) -> void
-; Obj.: Dado uma opção e uma parâmetro, escreve o parâmetro da opção na tela
+; msg_param: Char (al) -> String (di)
+; Obj.: Dado uma opção x, devolve a mensagem de opção "Opcao [-x]"
+msg_param	proc	near
+
+	lea	di,OPCAO+8
+	stosb
+
+	lea	di,OPCAO
+	ret
+
+msg_param	endp
+
+; print_param: Char (al) String (si) -> void
+; Obj.: Dado uma opção e um parâmtro, imprime a mensagem de parâmetro
 print_param	proc	near
 
-	lea	di,OPCAO2
-	stosb
-	lea	bx,OPCAO
+	call	msg_param
+
+	mov	bx,di
 	call	printf_s
-	lea	bx,OPCAO2
+
+	mov	bx,si
 	call	printf_s
-	mov	bx,cx
-	call	printf_s
+
 	lea	bx,ENTER
 	call	printf_s
 
@@ -736,21 +784,34 @@ print_param	proc	near
 
 print_param	endp
 
-; salva_dig_tensao: Char (dl) Inteiro (cx) -> Boolean (CF)
-; Obj.: Dado um dígito e um contador de dígitos, salva esse dígito no buffer da tensão e incrmenta o contador
+; fprint_param: File* (bx) Char (al) String (dx) -> void
+; Obj.: Dado um arquivo, uma opção e um parâmtro, imprime a mensagem de parâmetro
+fprint_param	proc	near
+
+	push	dx
+
+	call	msg_param
+
+	mov	si,di
+	call	fprintf
+
+	pop	si
+	call	fprintf
+
+	lea	si,ENTER
+	call	fprintf
+
+	ret
+
+fprint_param	endp
+
+; salva_dig_tensao: Char (al) String (di) Inteiro (cx) -> String (di) Boolean (CF)
+; Obj.: Dado um dígito, uma string e um contador de dígitos, salva esse dígito na string e incrmenta o contador
 ; Se chegou em 4 dígitos, define CF como 1
 ; Se não chegou, define CF como 0
 salva_dig_tensao	proc	near
 
-	push	di
-
-	mov	al,dl
-
-	lea	di,TENSAO_BUF_STR
-	add	di,cx
 	stosb
-
-	pop	di
 
 	inc	cx
 
@@ -767,12 +828,10 @@ sdt_ret:
 salva_dig_tensao	endp
 
 ; verifica_tensao: String (bx) Inteiro (ch) -> Boolean (CF)
-; Obj.: Dada uma string e seu tamanho, verifica se a string é menor ou igual a "499"
+; Obj.: Dada uma string e seu tamanho (<= 3), verifica se a string é menor ou igual a "499"
 ; Se for, define CF como 0
 ; Se não for, define CF como 1
 verifica_tensao	proc	near
-
-	push	dx
 
 	cmp	cx,3
 	jb	vt_ret
@@ -781,14 +840,10 @@ verifica_tensao	proc	near
 	cmp	dl,'5'
 	jb	vt_ret
 
-	pop	dx
-
 	stc
 	ret
 
 vt_ret:
-	pop	dx
-
 	clc
 	ret
 
@@ -920,6 +975,29 @@ seg_2_dig:
 
 formata_tempo	endp
 
+; fprintf: File* (bx) String (si) -> void
+; Obj.: Dado um arquivo e uma string, escreve a string no arquivo
+fprintf proc    near
+
+        mov     dl,[si]
+
+        cmp     dl,0
+        je      fim_fprintf
+
+        inc     si
+
+        call    setChar
+
+        jmp     fprintf
+
+fim_fprintf:
+
+        ret
+
+fprintf endp
+
+; Funções elaboradas a partir de exemplos no moodle:
+
 ; atoi: String (bx) -> Inteiro (ax)
 ; Obj.: recebe uma string e transforma em um inteiro
 atoi	proc near
@@ -975,12 +1053,7 @@ ps_1:
 printf_s	endp
 
 ; sprintf_w: Inteiro (ax) String (bx) -> String (bx)
-; Obj.: dado um numero e uma string, transforma o numero em ascii e salva na string dada, quase um itoa()
-; Ex.:
-; mov ax, 3141
-; lea bx, String (em que String e db 10 dup (?)) (o dup e pra ele saber que e pra reservar 100 bytes e o (?) diz que pode deixar o lixo de memoria)
-; call sprintf_w
-; -> string recebe "3141",0
+; Obj.: dado um numero e uma string, transforma o numero em ascii e salva na string dada, adicionando '\0' no final
 sprintf_w	proc	near
 
 	push	dx
@@ -1045,13 +1118,8 @@ sw_continua2:
 		
 sprintf_w	endp
 
-; fopen: String (dx) -> File* (bx) Boolean (CF)		(Passa o File* para o ax tambem, mas por algum motivo ele move pro bx)
+; fopen: String (dx) -> File* (bx) Boolean (CF)
 ; Obj.: Dado o caminho para um arquivo, devolve o ponteiro desse arquivo e define CF como 0 se o processo deu certo
-; Ex.:
-; lea dx, fileName		(em que fileName eh "temaDeCasa/feet/feet1.png",0) (Talvez a orientacao das barras varie com o sistema operacional, na duvida coloca tudo dentro de WORK pra poder usar so o nome do arquivo)
-; call fopen
-; -> bx recebe a imagem e CF (carry flag) nao ativa
-; ou -> bx recebe lixo e CF ativa
 fopen	proc	near
 
 	mov	al,0
@@ -1064,11 +1132,6 @@ fopen	endp
 
 ; fcreate: String (dx) -> File* (bx) Boolean (CF)
 ; Obj.: Dado o caminho para um arquivo, cria um novo arquivo com dado nome em tal caminho e devolve seu ponteiro, define CF como 0 se o processo deu certo
-; Ex.:
-; lea dx, fileName		(em que fileName eh "fatos/porQueChicoEhOMelhor.txt",0) (Talvez a orientacao das barras varie com o sistema operacional, na duvida coloca tudo dentro de WORK pra poder usar so o nome do arquivo)
-; call fcreate
-; -> bx recebe o txt e CF (carry flag) nao ativa
-; ou -> bx recebe lixo e CF ativa
 fcreate	proc	near
 
 	mov	cx,0
@@ -1082,10 +1145,6 @@ fcreate	endp
 ; fclose: File* (bx) -> Boolean (CF)
 ; Obj.: evitar um memory leak fechando o arquivo
 ; Ex.:
-; mov bx, filePtr	(em que filePtr eh um ponteiro retornado por fopen/fcreate)
-; call fclose
-; -> Se deu certo, CF == 0
-; (Recomendo zerar o filePtr pra voce nao fazer merda)
 fclose	proc	near
 
 	mov	ah,3eh
@@ -1095,12 +1154,7 @@ fclose	proc	near
 fclose	endp
 
 ; getChar: File* (bx) -> Char (dl) Inteiro (AX) Boolean (CF)
-; Obj.: Dado um arquivo, devolve um caractere, a posicao do cursor e define CF como 0 se a leitura deu certo (diferente do getchar() do C, mais pra um getc(FILE*))
-; Ex.:
-; mov bx, filePtr	(em que filePtr eh um ponteiro retornado por fopen/fcreate)
-; call getChar
-; -> char em dl e cursor em AX se CF == 0
-; senao, deu ruim
+; Obj.: Dado um arquivo, devolve um caractere, a posicao do cursor e define CF como 0 se a leitura deu certo
 getChar	proc	near
 
 	push	cx
@@ -1126,12 +1180,8 @@ erro_getchar:
 
 getChar	endp
 
-; setChar: File* (bx) Char (dl) -> Inteiro (ax) Boolean (CF)
-; Obj.: Dado um arquivo e um caractere, escreve esse caractere no arquivo e devolve a posicao do cursor e define CF como 0 se a leitura deu certo
-; Ex.:
-; mov bx, filePtr	(em que filePtr eh um ponteiro retornado por fopen/fcreate)
-; call setChar
-; -> posicao do cursor em AX e CF == 0 se deu certo
+; setChar: File* (bx) Char (dl) -> Inteiro (ax)
+; Obj.: Dado um arquivo e um caractere, escreve esse caractere no arquivo e devolve a posicao do cursor
 setChar	proc	near
 
 	mov	ah,40h
@@ -1142,26 +1192,5 @@ setChar	proc	near
 	ret
 
 setChar	endp
-
-; fprintf: File* (bx) String (si) -> void
-; Obj.: Dado um arquivo e uma string, escreve a string no arquivo
-fprintf proc    near
-
-        mov     dl,[si]
-
-        cmp     dl,0
-        je      fim_fprintf
-
-        inc     si
-
-        call    setChar
-
-        jmp     fprintf
-
-fim_fprintf:
-
-        ret
-
-fprintf endp
 
 end

@@ -38,15 +38,11 @@ TENSAO		db	0		; Tensão em inteiro
 TENSAO_BUF_STR	db	4 dup(0)	; Buffer para armazenar a tensão lida do arquivo
 TENSAO_BUF	db	0		; Buffer para tensão em inteiro
 
-SEGUNDOS_STR	db	6 dup(0)	; contador de segundos em ASCII
+SEGUNDOS_STR	db	6 dup(0)	; Contador de segundos em ASCII
 
 SEGUNDOS	dw	0		; Contador de segundos (linhas do arquivo)
 SEGUNDOS_Q	dw	0		; Contador de segundos de tensão com qualidade
 SEGUNDOS_S	dw	0		; Contador de segundos sem tensão
-
-HORA_BUF	db	0
-MIN_BUF		db	0
-SEG_BUF		db	0
 
 TENSOES         db      0               ; Contador de número de tensões em uma linha
 TENSOES_Q	db	0		; Contador de tensões com qualidade em uma linha
@@ -67,15 +63,19 @@ ERRO_ARQUIVO	db	"Arquivo de entrada nao existente",CR,LF,0	; Mensagem de erro pa
 ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inválida
 ERRO_CONTEUDO	db	" invalido: ",0	; Mensagem de erro para conteúdo inválido
 
-ERRO		db	0
-ULT_LINHA       db      0
+ERRO		db	0	; Indicador de erro
+ULT_LINHA       db      0	; Indicador de última linha do arquivo
 
-TEMPO		db	"Tempo total de medicoes: ",0
-TEMPO_Q		db	"Tempo tensao de qualidade: ",0
+TEMPO		db	"Tempo total de medicoes: ",0	; Mensagens de tempo de medição
+TEMPO_Q		db	"Tempo de tensao adequada: ",0
 TEMPO_S		db	"Tempo sem tensao: ",0
 
-TEMPO_BUF	db	"        ",0
-TEMPO_FORMAT	db	"00:00:00",0
+TEMPO_BUF	db	"        ",0	; Buffer para armazenar tempo formatado
+TEMPO_FORMAT	db	"00:00:00",0	; Modelo de formatação de tempo
+
+HORA_BUF	dw	0		; Buffers usados para formatação do tempo
+MIN_BUF		dw	0
+SEG_BUF		dw	0
 
 sw_n	        dw	0			; Usada dentro da funcao sprintf_w
 sw_f    	db	0			; Usada dentro da funcao sprintf_w
@@ -484,7 +484,9 @@ processa_tensao:
 	; Salva tensão como inteiro
 
 	lea	bx,TENSAO_BUF_STR
+	push	dx
 	call	atoi
+	pop	dx
 	mov	TENSAO_BUF,al
 
 sem_tensao:
@@ -601,8 +603,8 @@ relatorio_tela:
 	call	printf_s
 
 	mov	ax,SEGUNDOS
-	lea	bx,TEMPO_BUF
 	call	formata_tempo
+	mov	bx,si
 	call	printf_s
 
 	lea	bx,ENTER
@@ -627,47 +629,19 @@ relatorio_arquivo:
 	lea	dx,TENSAO_STR
 	call	fprint_param
 
+	; Imprime medições do relatório no arquivo
+
         lea	si,TEMPO
-	call	fprintf
-
-	push	bx
-	lea	bx,TEMPO_BUF
 	mov	ax,SEGUNDOS
-	call	formata_tempo
-	mov	si,bx
-	pop	bx
-	call	fprintf
-
-	lea	si,ENTER
-	call	fprintf
+	call	fprint_tempo
 
 	lea	si,TEMPO_Q
-	call	fprintf
-
-	push	bx
-	lea	bx,TEMPO_BUF
 	mov	ax,SEGUNDOS_Q
-	call	formata_tempo
-	mov	si,bx
-	pop	bx
-	call	fprintf
-
-	lea	si,ENTER
-	call	fprintf
+	call	fprint_tempo
 
 	lea	si,TEMPO_S
-	call	fprintf
-
-	push	bx
-	lea	bx,TEMPO_BUF
 	mov	ax,SEGUNDOS_S
-	call	formata_tempo
-	mov	si,bx
-	pop	bx
-	call	fprintf
-
-	lea	si,ENTER
-	call	fprintf
+	call	fprint_tempo
 
 fim:
 
@@ -849,106 +823,113 @@ vt_ret:
 
 verifica_tensao	endp
 
-; formata_tempo: Inteiro (ax) String (bx) -> String (bx)
-; Obj.: Dado o número de segundos e uma string, devolve o tempo formatado na string 
+; formata_tempo: Inteiro (ax) -> String (si)
+; Obj.: Dado o número de segundos, devolve o tempo formatado a partir do primeiro número significativo
 formata_tempo	proc near
 
+	lea	di,TEMPO_BUF		; Copia modelo de formatação de tempo ("00:00:00",0) para a string
 	lea	si,TEMPO_FORMAT
-	mov	di,bx
 	mov	cx,9
 	rep	movsb
-	mov	di,bx
 
-	xor	dl,dl
-
-	mov	dh,60
-
-	mov	SEG_BUF,al
-
-	cmp	ax,60
-	jb	comec_seg
+	cmp	ax,60		; Verifica se é menor que 60 segundos
+	jb	comec_seg	; Se for, já exibe começando pelos segundos
 
 calc_min:
 
-	div	dh
+	; Se for maior ou igual a 60 segundos, calcula minutos
 
-	mov	MIN_BUF,al
-	mov	SEG_BUF,ah
+	call	div_60
 
-	cmp	al,60
-	jb	comec_min
+	mov	SEG_BUF,dx
+
+	cmp	ax,60
+	jb	comec_min	; Se for menor que 60 minutos, já exibe começando pelos minutos
 
 calc_hora:
 
-	xor	ah,ah
+	; Se for maior ou igual a 60 minutos, calcula horas
 
-	div	dh
+	call	div_60
 
-	mov	HORA_BUF,al
-	mov	MIN_BUF,ah
+	mov	HORA_BUF,ax
+	mov	MIN_BUF,dx
 
 tempo_hora:
 
+	; Exibe horas
+
 	xor	dx,dx
 
-	mov	al,HORA_BUF
-	cmp	al,10
+	cmp	ax,10		; Se for maior ou igual a 10, exibe 2 dígitos
 	jae	hora_2_dig
 
-	inc	cx
+	inc	cx	; Se não for, incrementa o posição de início
 
 hora_2_dig:
 
-	mov	bx,di
+	mov	bx,di	; Calcula ponteiro de destino
 	add	bx,cx
 
 	xor	ah,ah
 
+	push	cx
 	call	sprintf_w
+	pop	cx
 
-	mov	byte ptr [bx],":"
+	mov	byte ptr [bx],":"	; Adiciona ':' depois das horas
 
 	jmp     tempo_min
 
 comec_min:
-	mov	cx,3
+	mov	MIN_BUF,ax
+	mov	cx,3		; Se começa em minutos, atualiza posição de início
 
 tempo_min:
+
+	; Exibe minutos
+
 	xor	dx,dx
 
-	mov	al,MIN_BUF
-	cmp	al,10
+	mov	ax,MIN_BUF
+	cmp	ax,10
 	jae	min_2_dig
 
-        cmp     cx,3
+        cmp     cx,3	; Se minuto ocupar 1 dígito e for o primeiro significativo
         jne     n_comec_min
-	inc	cx
+	inc	cx	; Incrementa posição de início
 
 n_comec_min:
-	mov	dx,1
+	inc	dx
 
 min_2_dig:
-	mov	bx,di
+	mov	bx,di	; Calcula ponteiro de destino
 	add	bx,dx
 	add	bx,3
 
 	xor	ah,ah
 	xor	dx,dx
 
+	push	cx
 	call	sprintf_w
+	pop	cx
 
 	mov	byte ptr [bx],":"
 
         jmp     tempo_seg
 
 comec_seg:
+	mov	SEG_BUF,ax
 	mov	cx,6
 
 tempo_seg:
+
+	; Exibe segundos
+
 	xor	dx,dx
 
-	mov	al,SEG_BUF
-	cmp	al,10
+	mov	ax,SEG_BUF
+	cmp	ax,10
 	jae	seg_2_dig
 
         cmp     cx,6
@@ -956,7 +937,7 @@ tempo_seg:
 	inc	cx
 
 n_comec_seg:
-	mov	dx,1
+	inc	dx
 
 seg_2_dig:
 	mov	bx,di
@@ -966,14 +947,49 @@ seg_2_dig:
 	xor	ah,ah
 	xor	dx,dx
 
+	push	cx
 	call	sprintf_w
+	pop	cx
 
-	add	di,cx
-	mov	bx,di
+	add	di,cx	; Calcula retorno com base na posição de início
+	mov	si,di	; Para devolver o tempo formatado a partir do primeiro número significativo
 
 	ret
 
 formata_tempo	endp
+
+; div_60: Inteiro (ax) -> Inteiro (ax) Inteiro (dx)
+; Obj.: Dado um número, divide por 60 e devolve o quociente em ax e o resto em dx
+div_60	proc	near
+
+	xor	dx,dx
+	mov	cx,60
+	div	cx
+	xor	cx,cx
+
+	ret
+
+div_60	endp
+
+; fprint_tempo: File* (bx) Inteiro (ax) String (si) -> void
+; Obj.: Dado um arquivo, um número de segundos e uma string, imprime a string com o tempo formatado
+fprint_tempo	proc	near
+
+	push	ax
+	call	fprintf
+	pop	ax
+
+	push	bx
+	call	formata_tempo
+	pop	bx
+	call	fprintf
+
+	lea	si,ENTER
+	call	fprintf
+
+	ret
+
+fprint_tempo	endp
 
 ; fprintf: File* (bx) String (si) -> void
 ; Obj.: Dado um arquivo e uma string, escreve a string no arquivo
@@ -1002,8 +1018,6 @@ fprintf endp
 ; Obj.: recebe uma string e transforma em um inteiro
 atoi	proc near
 
-        push    dx
-
 	mov	ax,0		; A = 0;
 		
 atoi_2:
@@ -1024,8 +1038,6 @@ atoi_2:
 	jmp	atoi_2		;}
 
 atoi_1:
-        pop     dx
-
 	ret			; return A;
 
 atoi	endp
@@ -1055,9 +1067,6 @@ printf_s	endp
 ; sprintf_w: Inteiro (ax) String (bx) -> String (bx)
 ; Obj.: dado um numero e uma string, transforma o numero em ascii e salva na string dada, adicionando '\0' no final
 sprintf_w	proc	near
-
-	push	dx
-	push	cx
 
 	mov	sw_n,ax		; void sprintf_w(char *string, WORD n) {
 
@@ -1112,8 +1121,6 @@ sw_continua2:
 
 	mov	byte ptr[bx],0	;	*string = '\0';
 				; }
-	pop	cx
-	pop	dx
 	ret			; return;
 		
 sprintf_w	endp

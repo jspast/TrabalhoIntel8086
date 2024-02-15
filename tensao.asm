@@ -8,15 +8,15 @@
 ; CONSTANTES
 ;------------------------------------------
 
-CR              equ	0Dh  	; Carriage Return (Enter)
-LF              equ	0Ah  	; Line Feed ('\n')
+CR		equ	0Dh	; Carriage Return (Enter)
+LF		equ	0Ah	; Line Feed ('\n')
 TAB		equ	09h	; Tabulação
 
-MAXCMD          equ	127	; Tamanho máximo da linha de comando
+MAXCMD		equ	127	; Tamanho máximo da linha de comando
 MAXARQ		equ	127	; Tamanho máximo do nome do arquivo
 
 MAXFILE_BUF	equ	1	; Tamanho do buffer para leitura e escrita de arquivo
-MAXLINHA_BUF    equ     1000	; Tamanho do buffer de linha do arquivo
+MAXLINHA_BUF	equ	1000	; Tamanho do buffer de linha do arquivo
 
 MIN_TENSAO	equ	10	; O mínimo de tensão não considerado sem tensão
 
@@ -29,7 +29,7 @@ CMDLINE		db	MAXCMD dup(0)	; Buffer para armazenar a linha de comando
 FILE_IN		db	"a.in",0	; Nome do arquivo de entrada padrão
 		db 	MAXARQ dup(0)
 
-FILE_OUT	db      "a.out",0	; Nome do arquivo de saída padrão
+FILE_OUT	db	"a.out",0	; Nome do arquivo de saída padrão
 		db	MAXARQ dup(0)
 
 TENSAO_STR	db	"127",0		; Tensão padrão em ASCII
@@ -44,7 +44,7 @@ SEGUNDOS	dw	0		; Contador de segundos (linhas do arquivo)
 SEGUNDOS_Q	dw	0		; Contador de segundos de tensão com qualidade
 SEGUNDOS_S	dw	0		; Contador de segundos sem tensão
 
-TENSOES         db      0               ; Contador de número de tensões em uma linha
+TENSOES		db	0		; Contador de número de tensões em uma linha
 TENSOES_Q	db	0		; Contador de tensões com qualidade em uma linha
 TENSOES_S	db	0		; Contador de tensões sem tensão em uma linha
 
@@ -64,7 +64,7 @@ ERRO_LINHA	db	"Linha ",0	; Mensagem de erro para linha inválida
 ERRO_CONTEUDO	db	" invalido: ",0	; Mensagem de erro para conteúdo inválido
 
 ERRO		db	0	; Indicador de erro
-ULT_LINHA       db      0	; Indicador de última linha do arquivo
+ULT_LINHA	db	0	; Indicador de última linha do arquivo
 
 TEMPO		db	"Tempo total de medicoes: ",0	; Mensagens de tempo de medição
 TEMPO_Q		db	"Tempo de tensao adequada: ",0
@@ -77,9 +77,9 @@ HORA_BUF	dw	0		; Buffers usados para formatação do tempo
 MIN_BUF		dw	0
 SEG_BUF		dw	0
 
-sw_n	        dw	0			; Usada dentro da funcao sprintf_w
-sw_f    	db	0			; Usada dentro da funcao sprintf_w
-sw_m	        dw	0			; Usada dentro da funcao sprintf_w
+sw_n		dw	0			; Usada dentro da funcao sprintf_w
+sw_f		db	0			; Usada dentro da funcao sprintf_w
+sw_m		dw	0			; Usada dentro da funcao sprintf_w
 
 FileBuffer	db	MAXFILE_BUF dup (?)	; Usada dentro do setChar e getChar
 
@@ -96,12 +96,12 @@ FileBuffer	db	MAXFILE_BUF dup (?)	; Usada dentro do setChar e getChar
 
 	; Salva linha de comando em CMDLINE
 
-	push	ds      ; Salva o segmento de dados
+	push	ds	; Salva o segmento de dados
 
-	mov     ax,ds   ; Troca DS com ES para poder usa o REP MOVSB
-	mov     bx,es
-	mov     ds,bx
-	mov     es,ax
+	mov	ax,ds	; Troca DS com ES para poder usa o REP MOVSB
+	mov	bx,es
+	mov	ds,bx
+	mov	es,ax
 
 	mov	si,80h	; Obtém o tamanho do string da linha de comando e coloca em CX
 	mov	ch,0
@@ -115,10 +115,10 @@ FileBuffer	db	MAXFILE_BUF dup (?)	; Usada dentro do setChar e getChar
 
 	pop	ds	; retorna as informações dos registradores de segmentos
 
-	mov     ax,ds	; Faz ES apontar para o segmento de dados
-	mov     es,ax
+	mov	ax,ds	; Faz ES apontar para o segmento de dados
+	mov	es,ax
 
-	lea     si,CMDLINE
+	lea	si,CMDLINE
 
 percorre_cmd:
 
@@ -177,7 +177,7 @@ salva_opcao:
 
 	call	strlen
 
-	rep     movsb
+	rep	movsb
 
 	mov	byte ptr[di],0	; Coloca 0 no final da string
 
@@ -234,7 +234,7 @@ erro_v:
 	; Erro: valor da tensão inválido
 
 	lea	bx,ERRO_TENSAO
-	call    printf_s
+	call	printf_s
 
 	jmp	fim
 
@@ -259,7 +259,7 @@ erro_abre_arquivo:
 	; Erro ao abrir arquivo
 
 	lea	bx,ERRO_ARQUIVO
-	call    printf_s
+	call	printf_s
 
 	jmp	fim
 
@@ -267,10 +267,10 @@ processa_nova_linha:
 
 	; Inicia processamento de nova linha
 
-	pop     bx	; Recupera e guarda handle do arquivo
-        push    bx
+	pop	bx	; Recupera e guarda handle do arquivo
+	push	bx
 
-        lea	di,LINHA_BUF
+	lea	di,LINHA_BUF
 
 	mov	al,DIG_1_BUF	; Salva primeiro caractere da linha lido ao acabar a linha anterior
 
@@ -283,7 +283,7 @@ processa_arquivo:
 	call	getChar
 	jnc	nfim_arquivo1	; Testa se é o fim do arquivo
 
-        inc     ULT_LINHA	; Se for, incrementa a variável de última linha
+	inc	ULT_LINHA	; Se for, incrementa a variável de última linha
 
 	jmp	fim_linha1
 
@@ -308,7 +308,7 @@ fim_linha1:
 	call	getChar
 	jnc	nfim_arquivo2	; Testa se é o fim do arquivo
 
-        inc     ULT_LINHA	; Se for, incrementa a variável de última linha
+	inc	ULT_LINHA	; Se for, incrementa a variável de última linha
 	
 	jmp	fim_linha2
 
@@ -360,7 +360,7 @@ fim_arquivo3:
 	; Trata caso de linha "fim"
 
 	dec	SEGUNDOS
-	inc     ULT_LINHA
+	inc	ULT_LINHA
 
 	jmp	fecha_arquivo
 
@@ -494,9 +494,9 @@ sem_tensao:
 	; Verifica se é sem tensão
 
 	cmp	al,MIN_TENSAO
-        jae     qualidade_tensao
+	jae	qualidade_tensao
 
-        inc     TENSOES_S
+	inc	TENSOES_S
 
 	jmp	fim_processa_tensao	; Se for, já se sabe que não tem qualidade
 
@@ -507,7 +507,7 @@ qualidade_tensao:
 	mov	ah,TENSAO	; Teste -10
 	sub	ah,10
 
-        cmp	al,ah
+	cmp	al,ah
 	jb	fim_processa_tensao
 
 	add	ah,20		; Teste +10
@@ -524,7 +524,7 @@ fim_processa_tensao:
 	cmp	dl,0
 	je	calc_tensoes
 
-        inc     si
+	inc	si
 	jmp	salva_tensao	; Se não for, calcula a próxima
 
 calc_tensoes:
@@ -548,8 +548,8 @@ fim_calc_tensoes:
 
 	; Verifica se é a última linha do arquivo
 
-        cmp     ULT_LINHA,0
-        jne     ultima_linha
+	cmp	ULT_LINHA,0
+	jne	ultima_linha
 
 	jmp	processa_nova_linha	; Se não for, processa próxima linha
 
@@ -614,8 +614,8 @@ relatorio_arquivo:
 
 	; Imprime os parâmetros do relatório no arquivo
 
-	lea     dx,FILE_OUT
-        call    fcreate
+	lea	dx,FILE_OUT
+	call	fcreate
 
 	mov	al,'i'
 	lea	dx,FILE_IN
@@ -631,7 +631,7 @@ relatorio_arquivo:
 
 	; Imprime medições do relatório no arquivo
 
-        lea	si,TEMPO
+	lea	si,TEMPO
 	mov	ax,SEGUNDOS
 	call	fprint_tempo
 
@@ -688,7 +688,6 @@ p_str_1:
 	ret
 
 p_str_e:
-
 	stc	; Define CF como 1
 	ret
 
@@ -879,7 +878,7 @@ hora_2_dig:
 
 	mov	byte ptr [bx],":"	; Adiciona ':' depois das horas
 
-	jmp     tempo_min
+	jmp	tempo_min
 
 comec_min:
 	mov	MIN_BUF,ax
@@ -895,8 +894,8 @@ tempo_min:
 	cmp	ax,10
 	jae	min_2_dig
 
-        cmp     cx,3	; Se minuto ocupar 1 dígito e for o primeiro significativo
-        jne     n_comec_min
+	cmp	cx,3	; Se minuto ocupar 1 dígito e for o primeiro significativo
+	jne	n_comec_min
 	inc	cx	; Incrementa posição de início
 
 n_comec_min:
@@ -916,7 +915,7 @@ min_2_dig:
 
 	mov	byte ptr [bx],":"
 
-        jmp     tempo_seg
+	jmp	tempo_seg
 
 comec_seg:
 	mov	SEG_BUF,ax
@@ -932,8 +931,8 @@ tempo_seg:
 	cmp	ax,10
 	jae	seg_2_dig
 
-        cmp     cx,6
-        jne     n_comec_seg
+	cmp	cx,6
+	jne	n_comec_seg
 	inc	cx
 
 n_comec_seg:
@@ -993,22 +992,21 @@ fprint_tempo	endp
 
 ; fprintf: File* (bx) String (si) -> void
 ; Obj.: Dado um arquivo e uma string, escreve a string no arquivo
-fprintf proc    near
+fprintf proc	near
 
-        mov     dl,[si]
+	mov	dl,[si]
 
-        cmp     dl,0
-        je      fim_fprintf
+	cmp	dl,0
+	je	fim_fprintf
 
-        inc     si
+	inc	si
 
-        call    setChar
+	call	setChar
 
-        jmp     fprintf
+	jmp	fprintf
 
 fim_fprintf:
-
-        ret
+	ret
 
 fprintf endp
 
@@ -1177,11 +1175,10 @@ getChar	proc	near
 	cmp	ax,0
 	je	erro_getchar
 
-        clc
+	clc
 	ret
 
 erro_getchar:
-
 	stc
 	ret
 

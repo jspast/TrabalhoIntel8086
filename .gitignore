@@ -3,3 +3,5 @@
 *.MAP
 *.OBJ
 *.SBR
+*.OUT
+*.BAT
